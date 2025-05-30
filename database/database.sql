@@ -102,16 +102,19 @@ CREATE TABLE IF NOT EXISTS `users` (
   `name` varchar(100) NOT NULL,
   `email` varchar(100) NOT NULL,
   `password` varchar(255) NOT NULL,
+  `role` enum('admin','user') NOT NULL DEFAULT 'user',
+  `status` enum('active','inactive') NOT NULL DEFAULT 'active',
   `remember_token` varchar(64) DEFAULT NULL,
   `token_expires` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`id`),
   UNIQUE KEY `email` (`email`)
 ) ENGINE=InnoDB AUTO_INCREMENT=5 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- randevu_db.users: ~0 rows (yaklaşık) tablosu için veriler indiriliyor
-INSERT INTO `users` (`id`, `name`, `email`, `password`, `remember_token`, `token_expires`, `created_at`) VALUES
-	(4, 'Admin', 'admin@gmail.com', '$2y$10$ycjBP0Hdm83F/YStPtPQ0O6avCTOxJTJaWc9XduwamENW.BJDeSUu', NULL, NULL, '2025-05-30 13:45:41');
+INSERT INTO `users` (`id`, `name`, `email`, `password`, `role`, `status`, `remember_token`, `token_expires`, `created_at`) VALUES
+	(4, 'Admin', 'admin@gmail.com', '$2y$10$ycjBP0Hdm83F/YStPtPQ0O6avCTOxJTJaWc9XduwamENW.BJDeSUu', 'admin', 'active', NULL, NULL, '2025-05-30 13:45:41');
 
 /*!40103 SET TIME_ZONE=IFNULL(@OLD_TIME_ZONE, 'system') */;
 /*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;

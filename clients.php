@@ -41,7 +41,7 @@ try {
 include 'includes/header.php';
 ?>
 
-<body class="<?php echo $themeClass; ?>">
+<body class="<?php echo $themeClass; ?>" data-page="clients">
     <div class="wrapper">
         <?php include 'includes/sidebar.php'; ?>
 
@@ -66,24 +66,27 @@ include 'includes/header.php';
             <div class="container-fluid p-4">
                 <?php if (isset($_SESSION['success'])): ?>
                 <script>
+                    window.sessionSuccess = '<?php echo addslashes($_SESSION['success']); ?>';
                     document.addEventListener('DOMContentLoaded', function() {
-                        window.toast.show('<?php echo addslashes($_SESSION['success']); ?>', 'success');
+                        window.showToastMessage(window.sessionSuccess, 'success');
                     });
                 </script>
                 <?php unset($_SESSION['success']); endif; ?>
 
                 <?php if (isset($_SESSION['error'])): ?>
                 <script>
+                    window.sessionError = '<?php echo addslashes($_SESSION['error']); ?>';
                     document.addEventListener('DOMContentLoaded', function() {
-                        window.toast.show('<?php echo addslashes($_SESSION['error']); ?>', 'error');
+                        window.showToastMessage(window.sessionError, 'error');
                     });
                 </script>
                 <?php unset($_SESSION['error']); endif; ?>
 
                 <?php if (isset($_SESSION['warning'])): ?>
                 <script>
+                    window.sessionWarning = '<?php echo addslashes($_SESSION['warning']); ?>';
                     document.addEventListener('DOMContentLoaded', function() {
-                        window.toast.show('<?php echo addslashes($_SESSION['warning']); ?>', 'warning');
+                        window.showToastMessage(window.sessionWarning, 'warning');
                     });
                 </script>
                 <?php unset($_SESSION['warning']); endif; ?>
@@ -343,144 +346,7 @@ include 'includes/header.php';
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="assets/js/script.js"></script>
     <script src="assets/js/toast.js"></script>
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Sidebar toggle
-        const sidebar = document.getElementById('sidebar');
-        const sidebarCollapse = document.getElementById('sidebarCollapse');
-        const overlay = document.querySelector('.sidebar-overlay');
-
-        function toggleSidebar() {
-            sidebar.classList.toggle('active');
-            overlay.classList.toggle('active');
-        }
-
-        sidebarCollapse.addEventListener('click', toggleSidebar);
-        overlay.addEventListener('click', toggleSidebar);
-
-        // Mobil görünümde sidebar'ı varsayılan olarak kapalı yap
-        if (window.innerWidth <= 768) {
-            sidebar.classList.remove('active');
-            overlay.classList.remove('active');
-        }
-
-        // Pencere boyutu değiştiğinde kontrol et
-        window.addEventListener('resize', function() {
-            if (window.innerWidth <= 768) {
-                sidebar.classList.remove('active');
-                overlay.classList.remove('active');
-            } else {
-                sidebar.classList.remove('active');
-                overlay.classList.remove('active');
-            }
-        });
-
-        // Tema değiştirme işlemleri
-        const themeToggle = document.getElementById('themeToggle');
-        const themeIcon = themeToggle.querySelector('i');
-        
-        // Kaydedilmiş temayı kontrol et ve ikonu güncelle
-        if (document.body.classList.contains('dark')) {
-            themeIcon.classList.remove('bi-moon-fill');
-            themeIcon.classList.add('bi-sun-fill');
-        }
-
-        // Tema değiştirme butonu tıklama olayı
-        themeToggle.addEventListener('click', function() {
-            if (document.body.classList.contains('dark')) {
-                document.body.classList.remove('dark');
-                themeIcon.classList.remove('bi-sun-fill');
-                themeIcon.classList.add('bi-moon-fill');
-                document.cookie = "theme=light; path=/; max-age=31536000";
-            } else {
-                document.body.classList.add('dark');
-                themeIcon.classList.remove('bi-moon-fill');
-                themeIcon.classList.add('bi-sun-fill');
-                document.cookie = "theme=dark; path=/; max-age=31536000";
-            }
-        });
-
-        // Arama işlemleri
-        const searchInput = document.getElementById('searchInput');
-        const searchButton = document.getElementById('searchButton');
-        const searchResultsModal = new bootstrap.Modal(document.getElementById('searchResultsModal'));
-        const searchResults = document.getElementById('searchResults');
-
-        function performSearch() {
-            const searchTerm = searchInput.value.trim();
-            if (searchTerm.length < 2) {
-                window.toast.show('Lütfen en az 2 karakter giriniz.', 'warning');
-                return;
-            }
-
-            fetch(`process/search-clients?term=${encodeURIComponent(searchTerm)}`)
-                .then(response => response.json())
-                .then(data => {
-                    searchResults.innerHTML = '';
-                    if (data.length === 0) {
-                        searchResults.innerHTML = '<div class="list-group-item">Danışan bulunamadı.</div>';
-                    } else {
-                        data.forEach(client => {
-                            const item = document.createElement('div');
-                            item.className = 'list-group-item';
-                            item.innerHTML = `
-                                <div class="d-flex w-100 justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-1">${client.name}</h5>
-                                        <p class="mb-1">
-                                            <span class="badge bg-primary me-2">${client.phone}</span>
-                                            ${client.email ? `<span class="badge bg-info">${client.email}</span>` : ''}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <a href="client-details?id=${client.id}" class="btn btn-sm btn-dark">
-                                            <i class="bi bi-eye"></i>
-                                        </a>
-                                        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editClientModal${client.id}">
-                                            <i class="bi bi-pencil"></i>
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteClientModal${client.id}">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            `;
-                            searchResults.appendChild(item);
-                        });
-                    }
-                    searchResultsModal.show();
-                })
-                .catch(error => {
-                    console.error('Arama hatası:', error);
-                    searchResults.innerHTML = '<div class="list-group-item text-danger">Arama sırasında bir hata oluştu.</div>';
-                    searchResultsModal.show();
-                });
-        }
-
-        searchButton.addEventListener('click', performSearch);
-        searchInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                performSearch();
-            }
-        });
-
-        // Form doğrulama
-        (function () {
-            'use strict'
-            var forms = document.querySelectorAll('.needs-validation')
-            Array.prototype.slice.call(forms).forEach(function (form) {
-                form.addEventListener('submit', function (event) {
-                    if (!form.checkValidity()) {
-                        event.preventDefault()
-                        event.stopPropagation()
-                    }
-                    form.classList.add('was-validated')
-                }, false)
-            })
-        })()
-    });
-    </script>
 </body>
 </html> 

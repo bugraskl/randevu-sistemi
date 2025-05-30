@@ -1,6 +1,21 @@
 <?php
 // Aktif sayfayı belirle
 $current_page = substr(basename($_SERVER['PHP_SELF']), 0, -4);
+
+// Kullanıcı rolünü kontrol et
+$isAdmin = false;
+if (isset($_SESSION['user_id'])) {
+    try {
+        require_once __DIR__ . '/../config/database.php';
+        $stmt = $db->prepare("SELECT role FROM users WHERE id = ?");
+        $stmt->execute([$_SESSION['user_id']]);
+        $user = $stmt->fetch();
+        $isAdmin = ($user && $user['role'] === 'admin');
+    } catch(Exception $e) {
+        // Hata durumunda admin yetkisi verme
+        $isAdmin = false;
+    }
+}
 ?>
 <!-- Sidebar Overlay -->
 <div class="sidebar-overlay"></div>
@@ -54,5 +69,13 @@ $current_page = substr(basename($_SERVER['PHP_SELF']), 0, -4);
                 Kullanıcı Ayarları
             </a>
         </li>
+        <?php if ($isAdmin): ?>
+        <li class="<?php echo $current_page === 'user-management' ? 'active' : ''; ?>">
+            <a href="user-management" class="d-flex align-items-center p-3  text-decoration-none">
+                <i class="bi bi-person me-2"></i>
+                Kullanıcı Yönetimi
+            </a>
+        </li>
+        <?php endif; ?>
     </ul>
 </nav> 

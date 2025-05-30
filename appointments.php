@@ -168,7 +168,7 @@ include 'includes/header.php';
 }
 </style>
 
-<body class="<?php echo $themeClass; ?>">
+<body class="<?php echo $themeClass; ?>" data-page="appointments">
     <div class="wrapper">
         <?php include 'includes/sidebar.php'; ?>
 
@@ -193,24 +193,27 @@ include 'includes/header.php';
             <div class="container-fluid p-4">
                 <?php if (isset($_SESSION['success'])): ?>
                 <script>
+                    window.sessionSuccess = '<?php echo addslashes($_SESSION['success']); ?>';
                     document.addEventListener('DOMContentLoaded', function() {
-                        window.toast.show('<?php echo addslashes($_SESSION['success']); ?>', 'success');
+                        window.showToastMessage(window.sessionSuccess, 'success');
                     });
                 </script>
                 <?php unset($_SESSION['success']); endif; ?>
 
                 <?php if (isset($_SESSION['error'])): ?>
                 <script>
+                    window.sessionError = '<?php echo addslashes($_SESSION['error']); ?>';
                     document.addEventListener('DOMContentLoaded', function() {
-                        window.toast.show('<?php echo addslashes($_SESSION['error']); ?>', 'error');
+                        window.showToastMessage(window.sessionError, 'error');
                     });
                 </script>
                 <?php unset($_SESSION['error']); endif; ?>
 
                 <?php if (isset($_SESSION['warning'])): ?>
                 <script>
+                    window.sessionWarning = '<?php echo addslashes($_SESSION['warning']); ?>';
                     document.addEventListener('DOMContentLoaded', function() {
-                        window.toast.show('<?php echo addslashes($_SESSION['warning']); ?>', 'warning');
+                        window.showToastMessage(window.sessionWarning, 'warning');
                     });
                 </script>
                 <?php unset($_SESSION['warning']); endif; ?>
@@ -546,6 +549,9 @@ include 'includes/header.php';
     <!-- Select2 JS -->
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
+    // Randevuları global değişkene aktar
+    window.appointments = <?php echo json_encode($calendar_appointments); ?>;
+    
     document.addEventListener('DOMContentLoaded', function() {
         // Select2'yi başlat - sadece yeni randevu ekleme modalı için
         $('#addAppointmentModal #client').select2({
@@ -598,314 +604,8 @@ include 'includes/header.php';
                 }
             });
         });
-
-        // Sidebar toggle
-        const sidebar = document.getElementById('sidebar');
-        const sidebarCollapse = document.getElementById('sidebarCollapse');
-        const overlay = document.querySelector('.sidebar-overlay');
-
-        function toggleSidebar() {
-            sidebar.classList.toggle('active');
-            overlay.classList.toggle('active');
-        }
-
-        sidebarCollapse.addEventListener('click', toggleSidebar);
-        overlay.addEventListener('click', toggleSidebar);
-
-        // Mobil görünümde sidebar'ı varsayılan olarak kapalı yap
-        if (window.innerWidth <= 768) {
-            sidebar.classList.remove('active');
-            overlay.classList.remove('active');
-        }
-
-        // Pencere boyutu değiştiğinde kontrol et
-        window.addEventListener('resize', function() {
-            if (window.innerWidth <= 768) {
-                sidebar.classList.remove('active');
-                overlay.classList.remove('active');
-            } else {
-                sidebar.classList.remove('active');
-                overlay.classList.remove('active');
-            }
-        });
-
-        // Tema değiştirme işlemleri
-        const themeToggle = document.getElementById('themeToggle');
-        const themeIcon = themeToggle.querySelector('i');
-        
-        // Kaydedilmiş temayı kontrol et ve ikonu güncelle
-        if (document.body.classList.contains('dark')) {
-            themeIcon.classList.remove('bi-moon-fill');
-            themeIcon.classList.add('bi-sun-fill');
-        }
-
-        // Tema değiştirme butonu tıklama olayı
-        themeToggle.addEventListener('click', function() {
-            if (document.body.classList.contains('dark')) {
-                document.body.classList.remove('dark');
-                themeIcon.classList.remove('bi-sun-fill');
-                themeIcon.classList.add('bi-moon-fill');
-                document.cookie = "theme=light; path=/; max-age=31536000";
-            } else {
-                document.body.classList.add('dark');
-                themeIcon.classList.remove('bi-moon-fill');
-                themeIcon.classList.add('bi-sun-fill');
-                document.cookie = "theme=dark; path=/; max-age=31536000";
-            }
-        });
-
-        // Arama işlemleri
-        const searchInput = document.getElementById('searchDate');
-        const searchButton = document.getElementById('searchButton');
-        const searchResultsModal = new bootstrap.Modal(document.getElementById('searchResultsModal'));
-        const searchResults = document.getElementById('searchResults');
-
-        // Gün isimleri
-        const gunler = {
-            'Monday': 'Pazartesi',
-            'Tuesday': 'Salı',
-            'Wednesday': 'Çarşamba',
-            'Thursday': 'Perşembe',
-            'Friday': 'Cuma',
-            'Saturday': 'Cumartesi',
-            'Sunday': 'Pazar'
-        };
-
-        function performSearch() {
-            const searchDate = searchInput.value;
-            if (!searchDate) return;
-
-            fetch(`process/search-appointments?date=${encodeURIComponent(searchDate)}`)
-                .then(response => response.json())
-                .then(data => {
-                    searchResults.innerHTML = '';
-                    if (data.length === 0) {
-                        searchResults.innerHTML = '<div class="list-group-item">Bu tarihte randevu bulunamadı.</div>';
-                    } else {
-                        data.forEach(appointment => {
-                            const [day, month, year] = appointment.appointment_date.split('.');
-                            const appointmentDate = new Date(year, month - 1, day);
-                            const dayName = gunler[appointmentDate.toLocaleDateString('en-US', { weekday: 'long' })];
-                            
-                            const item = document.createElement('div');
-                            item.className = 'list-group-item';
-                            item.innerHTML = `
-                                <div class="d-flex w-100 justify-content-between align-items-center">
-                                    <div>
-                                        <h5 class="mb-1">${appointment.client_name}</h5>
-                                        <p class="mb-1">
-                                            <span class="badge bg-primary me-2">${dayName}</span>
-                                            ${appointment.appointment_date} - ${appointment.appointment_time}
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editAppointmentModal${appointment.id}">
-                                            <i class="bi bi-pencil"></i>
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteAppointmentModal${appointment.id}">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </div>
-                                </div>
-                            `;
-                            searchResults.appendChild(item);
-                        });
-                    }
-                    searchResultsModal.show();
-                })
-                .catch(error => {
-                    console.error('Arama hatası:', error);
-                    searchResults.innerHTML = '<div class="list-group-item text-danger">Arama sırasında bir hata oluştu.</div>';
-                    searchResultsModal.show();
-                });
-        }
-
-        searchButton.addEventListener('click', performSearch);
-        searchInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                performSearch();
-            }
-        });
-
-        // Form doğrulama
-        (function () {
-            'use strict'
-            var forms = document.querySelectorAll('.needs-validation')
-            Array.prototype.slice.call(forms).forEach(function (form) {
-                form.addEventListener('submit', function (event) {
-                    if (!form.checkValidity()) {
-                        event.preventDefault()
-                        event.stopPropagation()
-                    }
-                    form.classList.add('was-validated')
-                }, false)
-            })
-        })()
-
-        // Takvim işlemleri
-        const calendarDays = document.getElementById('calendarDays');
-        const currentMonthElement = document.getElementById('currentMonth');
-        const prevMonthButton = document.getElementById('prevMonth');
-        const nextMonthButton = document.getElementById('nextMonth');
-        
-        let currentDate = new Date();
-        let currentMonth = currentDate.getMonth();
-        let currentYear = currentDate.getFullYear();
-
-        // Randevuları global değişkene aktar
-        window.appointments = <?php echo json_encode($calendar_appointments); ?>;
-
-        function updateCalendar() {
-            const firstDay = new Date(currentYear, currentMonth, 1);
-            const lastDay = new Date(currentYear, currentMonth + 1, 0);
-            const startingDay = firstDay.getDay() || 7; // Pazartesi = 1, Pazar = 7
-            const monthLength = lastDay.getDate();
-            
-            // Ay adını güncelle
-            const monthNames = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 
-                              'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
-            currentMonthElement.textContent = `${monthNames[currentMonth]} ${currentYear}`;
-            
-            // Takvim günlerini temizle
-            calendarDays.innerHTML = '';
-            
-            // Önceki ayın günlerini ekle
-            const prevMonthLastDay = new Date(currentYear, currentMonth, 0).getDate();
-            for (let i = startingDay - 1; i > 0; i--) {
-                const dayElement = createDayElement(prevMonthLastDay - i + 1, 'other-month');
-                calendarDays.appendChild(dayElement);
-            }
-            
-            // Mevcut ayın günlerini ekle
-            for (let i = 1; i <= monthLength; i++) {
-                const dayDate = new Date(currentYear, currentMonth, i);
-                const isToday = dayDate.toDateString() === new Date().toDateString();
-                const dayElement = createDayElement(i, isToday ? 'today' : '');
-                
-                // O güne ait randevuları ekle
-                const dayAppointments = window.appointments.filter(apt => {
-                    const aptDate = new Date(apt.appointment_date);
-                    return aptDate.getDate() === i && 
-                           aptDate.getMonth() === currentMonth && 
-                           aptDate.getFullYear() === currentYear;
-                });
-                
-                if (dayAppointments.length > 0) {
-                    dayElement.classList.add('has-appointments');
-                    dayAppointments.forEach(apt => {
-                        const aptElement = document.createElement('div');
-                        aptElement.className = `appointment-item ${getAppointmentStatus(apt)}`;
-                        aptElement.textContent = `${apt.formatted_time} - ${apt.client_name}`;
-                        aptElement.onclick = () => showAppointmentDetails(apt);
-                        dayElement.appendChild(aptElement);
-                    });
-                }
-                
-                calendarDays.appendChild(dayElement);
-            }
-            
-            // Sonraki ayın günlerini ekle
-            const remainingDays = 42 - (startingDay - 1 + monthLength); // 6 satır için 42 gün
-            for (let i = 1; i <= remainingDays; i++) {
-                const dayElement = createDayElement(i, 'other-month');
-                calendarDays.appendChild(dayElement);
-            }
-        }
-        
-        function createDayElement(day, className) {
-            const div = document.createElement('div');
-            div.className = `calendar-day ${className}`;
-            
-            // Gün numarası
-            const dayNumber = document.createElement('div');
-            dayNumber.className = 'calendar-day-number';
-            dayNumber.textContent = day;
-            div.appendChild(dayNumber);
-            
-            // Boş günler için randevu ekleme butonu
-            if (!className.includes('other-month')) {
-                const addButton = document.createElement('button');
-                addButton.className = 'btn btn-sm btn-outline-secondary add-appointment-btn';
-                addButton.innerHTML = '<i class="bi bi-plus"></i>';
-                addButton.style.position = 'absolute';
-                addButton.style.bottom = '5px';
-                addButton.style.right = '5px';
-                addButton.style.padding = '2px 6px';
-                addButton.style.fontSize = '0.8rem';
-                
-                // Tarih formatını oluştur
-                const year = currentYear;
-                const month = (currentMonth + 1).toString().padStart(2, '0');
-                const dayStr = day.toString().padStart(2, '0');
-                const dateStr = `${year}-${month}-${dayStr}`;
-                
-                addButton.onclick = (e) => {
-                    e.stopPropagation();
-                    const dateInput = document.getElementById('date');
-                    dateInput.value = dateStr;
-                    const modal = new bootstrap.Modal(document.getElementById('addAppointmentModal'));
-                    modal.show();
-                };
-                
-                div.appendChild(addButton);
-            }
-            
-            return div;
-        }
-        
-        function getAppointmentStatus(appointment) {
-            const aptDateTime = new Date(appointment.appointment_date + 'T' + appointment.appointment_time);
-            const now = new Date();
-            
-            if (aptDateTime < now) return 'past';
-            if (aptDateTime.toDateString() === now.toDateString()) return 'today';
-            return 'future';
-        }
-        
-        function showAppointmentDetails(appointment) {
-            // Randevu detaylarını göster
-            const modal = new bootstrap.Modal(document.getElementById('editAppointmentModal' + appointment.id));
-            modal.show();
-        }
-        
-        prevMonthButton.addEventListener('click', () => {
-            currentMonth--;
-            if (currentMonth < 0) {
-                currentMonth = 11;
-                currentYear--;
-            }
-            updateCalendar();
-        });
-        
-        nextMonthButton.addEventListener('click', () => {
-            currentMonth++;
-            if (currentMonth > 11) {
-                currentMonth = 0;
-                currentYear++;
-            }
-            updateCalendar();
-        });
-        
-        // Takvimi başlat
-        updateCalendar();
-
-        // Görünüm değiştirme fonksiyonu
-        window.changeView = function(view) {
-            const url = new URL(window.location.href);
-            url.searchParams.set('view', view);
-            window.history.pushState({}, '', url);
-        };
-
-        // Sayfa yüklendiğinde URL'deki görünümü kontrol et
-        const urlParams = new URLSearchParams(window.location.search);
-        const view = urlParams.get('view');
-        if (view === 'calendar') {
-            document.getElementById('calendar-tab').click();
-        } else {
-            document.getElementById('list-tab').click();
-        }
     });
     </script>
+    <script src="assets/js/script.js"></script>
 </body>
 </html> 

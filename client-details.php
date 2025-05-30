@@ -425,6 +425,7 @@ include 'includes/header.php';
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="assets/js/script.js"></script>
     <script>
     // Randevu düzenleme modalını açma fonksiyonu
     function editAppointment(id, date, time, notes) {
@@ -453,105 +454,6 @@ include 'includes/header.php';
         document.getElementById('payment_appointment_id').value = id;
         new bootstrap.Modal(document.getElementById('addPaymentModal')).show();
     }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        // Sidebar toggle
-        const sidebar = document.getElementById('sidebar');
-        const sidebarCollapse = document.getElementById('sidebarCollapse');
-        const overlay = document.querySelector('.sidebar-overlay');
-
-        function toggleSidebar() {
-            sidebar.classList.toggle('active');
-            overlay.classList.toggle('active');
-        }
-
-        sidebarCollapse.addEventListener('click', toggleSidebar);
-        overlay.addEventListener('click', toggleSidebar);
-
-        // Mobil görünümde sidebar'ı varsayılan olarak kapalı yap
-        if (window.innerWidth <= 768) {
-            sidebar.classList.remove('active');
-            overlay.classList.remove('active');
-        }
-
-        // Pencere boyutu değiştiğinde kontrol et
-        window.addEventListener('resize', function() {
-            if (window.innerWidth <= 768) {
-                sidebar.classList.remove('active');
-                overlay.classList.remove('active');
-            } else {
-                sidebar.classList.remove('active');
-                overlay.classList.remove('active');
-            }
-        });
-
-        // Tema değiştirme işlemleri
-        const themeToggle = document.getElementById('themeToggle');
-        const themeIcon = themeToggle.querySelector('i');
-        
-        // Kaydedilmiş temayı kontrol et ve ikonu güncelle
-        if (document.body.classList.contains('dark')) {
-            themeIcon.classList.remove('bi-moon-fill');
-            themeIcon.classList.add('bi-sun-fill');
-        }
-
-        // Tema değiştirme butonu tıklama olayı
-        themeToggle.addEventListener('click', function() {
-            if (document.body.classList.contains('dark')) {
-                document.body.classList.remove('dark');
-                themeIcon.classList.remove('bi-sun-fill');
-                themeIcon.classList.add('bi-moon-fill');
-                document.cookie = "theme=light; path=/; max-age=31536000";
-            } else {
-                document.body.classList.add('dark');
-                themeIcon.classList.remove('bi-moon-fill');
-                themeIcon.classList.add('bi-sun-fill');
-                document.cookie = "theme=dark; path=/; max-age=31536000";
-            }
-        });
-
-        // Form doğrulama ve gönderimi
-        const forms = document.querySelectorAll('.needs-validation');
-        forms.forEach(form => {
-            form.addEventListener('submit', function(event) {
-                if (!form.checkValidity()) {
-                    event.preventDefault();
-                    event.stopPropagation();
-                } else {
-                    // Form geçerliyse, submit butonunu devre dışı bırak
-                    const submitButton = form.querySelector('button[type="submit"]');
-                    if (submitButton) {
-                        submitButton.disabled = true;
-                        submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Kaydediliyor...';
-                    }
-                }
-                form.classList.add('was-validated');
-            });
-        });
-
-        // Modal kapanma olaylarını dinle
-        const modals = document.querySelectorAll('.modal');
-        modals.forEach(modal => {
-            modal.addEventListener('hidden.bs.modal', function() {
-                // Modal kapandığında formu sıfırla
-                const form = this.querySelector('form');
-                if (form) {
-                    form.reset();
-                    form.classList.remove('was-validated');
-                    const submitButton = form.querySelector('button[type="submit"]');
-                    if (submitButton) {
-                        submitButton.disabled = false;
-                        submitButton.innerHTML = submitButton.getAttribute('data-original-text') || 'Kaydet';
-                    }
-                }
-            });
-        });
-
-        // Submit butonlarının orijinal metinlerini sakla
-        document.querySelectorAll('button[type="submit"]').forEach(button => {
-            button.setAttribute('data-original-text', button.innerHTML);
-        });
-    });
     </script>
 </body>
 </html> 

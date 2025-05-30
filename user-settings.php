@@ -14,15 +14,46 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+// Veritabanı şeması kontrolü
+try {
+    $stmt = $db->query("DESCRIBE users");
+    $columns = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    
+    $requiredColumns = ['name', 'email', 'password'];
+    foreach ($requiredColumns as $column) {
+        if (!in_array($column, $columns)) {
+            $_SESSION['error'] = "Veritabanı şeması eksik. '$column' sütunu bulunamadı.";
+            header('Location: dashboard');
+            exit();
+        }
+    }
+} catch(PDOException $e) {
+    $_SESSION['error'] = "Veritabanı kontrolü yapılırken bir hata oluştu.";
+    header('Location: dashboard');
+    exit();
+}
+
 // Kullanıcı bilgilerini veritabanından çek
 try {
-    $stmt = $db->prepare("SELECT * FROM users WHERE id = ?");
+    $stmt = $db->prepare("SELECT id, name, email, password, role, status FROM users WHERE id = ?");
     $stmt->execute([$_SESSION['user_id']]);
     $user = $stmt->fetch();
 
     if (!$user) {
         $_SESSION['error'] = "Kullanıcı bulunamadı.";
         header('Location: index');
+        exit();
+    }
+    
+    // Güvenli değişken atama
+    $userName = $user['name'] ?? '';
+    $userEmail = $user['email'] ?? '';
+    $userPassword = $user['password'] ?? '';
+    
+    // Ek güvenlik kontrolleri
+    if (empty($userName) && empty($userEmail)) {
+        $_SESSION['error'] = "Kullanıcı verileri eksik veya bozuk.";
+        header('Location: dashboard');
         exit();
     }
 } catch(PDOException $e) {
@@ -39,53 +70,62 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $new_password = $_POST['new_password'];
     $confirm_password = $_POST['confirm_password'];
     
-    $errors = [];
+    $hasError = false;
     
     // İsim kontrolü
     if (empty($name)) {
         $_SESSION['error'] = "İsim alanı boş bırakılamaz.";
+        $hasError = true;
     }
     
     // Email kontrolü
     if (empty($email)) {
         $_SESSION['error'] = "Email alanı boş bırakılamaz.";
+        $hasError = true;
     } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         $_SESSION['error'] = "Geçerli bir email adresi giriniz.";
+        $hasError = true;
     }
     
     // Email benzersizlik kontrolü
-    if ($email !== $user['email']) {
+    if (!$hasError && $email !== $userEmail) {
         $stmt = $db->prepare("SELECT COUNT(*) FROM users WHERE email = ? AND id != ?");
         $stmt->execute([$email, $_SESSION['user_id']]);
         if ($stmt->fetchColumn() > 0) {
             $_SESSION['error'] = "Bu email adresi başka bir kullanıcı tarafından kullanılıyor.";
+            $hasError = true;
         }
     }
     
     // Şifre değişikliği yapılacaksa
-    if (!empty($new_password) || !empty($confirm_password)) {
+    if (!$hasError && (!empty($new_password) || !empty($confirm_password))) {
         // Mevcut şifre kontrolü
         if (empty($current_password)) {
             $_SESSION['error'] = "Mevcut şifrenizi giriniz.";
-        } elseif (!password_verify($current_password, $user['password'])) {
+            $hasError = true;
+        } elseif (!password_verify($current_password, $userPassword)) {
             $_SESSION['error'] = "Mevcut şifreniz yanlış.";
+            $hasError = true;
         }
         
         // Yeni şifre kontrolü
-        if (empty($new_password)) {
+        if (!$hasError && empty($new_password)) {
             $_SESSION['error'] = "Yeni şifre alanı boş bırakılamaz.";
-        } elseif (strlen($new_password) < 6) {
+            $hasError = true;
+        } elseif (!$hasError && strlen($new_password) < 6) {
             $_SESSION['error'] = "Yeni şifre en az 6 karakter olmalıdır.";
+            $hasError = true;
         }
         
         // Şifre eşleşme kontrolü
-        if ($new_password !== $confirm_password) {
+        if (!$hasError && $new_password !== $confirm_password) {
             $_SESSION['error'] = "Yeni şifreler eşleşmiyor.";
+            $hasError = true;
         }
     }
     
     // Hata yoksa güncelle
-    if (!$_SESSION['error']) {
+    if (!$hasError) {
         try {
             if (!empty($new_password)) {
                 // Şifre değişikliği ile birlikte güncelle
@@ -144,12 +184,12 @@ include 'includes/header.php';
                         <form method="POST" action="">
                             <div class="mb-3">
                                 <label for="name" class="form-label">İsim</label>
-                                <input type="text" class="form-control" id="name" name="name" value="<?php echo htmlspecialchars($user['name']); ?>" required>
+                                <input type="text" class="form-control" id="name" name="name" value="<?php echo htmlspecialchars($userName); ?>" required>
                             </div>
                             
                             <div class="mb-3">
                                 <label for="email" class="form-label">Email</label>
-                                <input type="email" class="form-control" id="email" name="email" value="<?php echo htmlspecialchars($user['email']); ?>" required>
+                                <input type="email" class="form-control" id="email" name="email" value="<?php echo htmlspecialchars($userEmail); ?>" required>
                             </div>
                             
                             <hr class="my-4">
@@ -179,86 +219,32 @@ include 'includes/header.php';
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="assets/js/script.js"></script>
     <script src="assets/js/toast.js"></script>
-    <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Sidebar toggle
-        const sidebar = document.getElementById('sidebar');
-        const sidebarCollapse = document.getElementById('sidebarCollapse');
-        const overlay = document.querySelector('.sidebar-overlay');
-
-        function toggleSidebar() {
-            sidebar.classList.toggle('active');
-            overlay.classList.toggle('active');
-        }
-
-        sidebarCollapse.addEventListener('click', toggleSidebar);
-        overlay.addEventListener('click', toggleSidebar);
-
-        // Mobil görünümde sidebar'ı varsayılan olarak kapalı yap
-        if (window.innerWidth <= 768) {
-            sidebar.classList.remove('active');
-            overlay.classList.remove('active');
-        }
-
-        // Pencere boyutu değiştiğinde kontrol et
-        window.addEventListener('resize', function() {
-            if (window.innerWidth <= 768) {
-                sidebar.classList.remove('active');
-                overlay.classList.remove('active');
-            } else {
-                sidebar.classList.remove('active');
-                overlay.classList.remove('active');
-            }
-        });
-
-        // Tema değiştirme işlemleri
-        const themeToggle = document.getElementById('themeToggle');
-        const themeIcon = themeToggle.querySelector('i');
-        
-        // Kaydedilmiş temayı kontrol et ve ikonu güncelle
-        if (document.body.classList.contains('dark')) {
-            themeIcon.classList.remove('bi-moon-fill');
-            themeIcon.classList.add('bi-sun-fill');
-        }
-
-        // Tema değiştirme butonu tıklama olayı
-        themeToggle.addEventListener('click', function() {
-            if (document.body.classList.contains('dark')) {
-                document.body.classList.remove('dark');
-                themeIcon.classList.remove('bi-sun-fill');
-                themeIcon.classList.add('bi-moon-fill');
-                document.cookie = "theme=light; path=/; max-age=31536000";
-            } else {
-                document.body.classList.add('dark');
-                themeIcon.classList.remove('bi-moon-fill');
-                themeIcon.classList.add('bi-sun-fill');
-                document.cookie = "theme=dark; path=/; max-age=31536000";
-            }
-        });
-    });
-    </script>
 
     <?php if (isset($_SESSION['success'])): ?>
     <script>
+        window.sessionSuccess = '<?php echo addslashes($_SESSION['success']); ?>';
         document.addEventListener('DOMContentLoaded', function() {
-            window.toast.show('<?php echo addslashes($_SESSION['success']); ?>', 'success');
+            window.showToastMessage(window.sessionSuccess, 'success');
         });
     </script>
     <?php unset($_SESSION['success']); endif; ?>
 
     <?php if (isset($_SESSION['error'])): ?>
     <script>
+        window.sessionError = '<?php echo addslashes($_SESSION['error']); ?>';
         document.addEventListener('DOMContentLoaded', function() {
-            window.toast.show('<?php echo addslashes($_SESSION['error']); ?>', 'error');
+            window.showToastMessage(window.sessionError, 'error');
         });
     </script>
     <?php unset($_SESSION['error']); endif; ?>
 
     <?php if (isset($_SESSION['warning'])): ?>
     <script>
+        window.sessionWarning = '<?php echo addslashes($_SESSION['warning']); ?>';
         document.addEventListener('DOMContentLoaded', function() {
-            window.toast.show('<?php echo addslashes($_SESSION['warning']); ?>', 'warning');
+            window.showToastMessage(window.sessionWarning, 'warning');
         });
     </script>
     <?php unset($_SESSION['warning']); endif; ?>
