@@ -1,0 +1,15 @@
+AddType application/manifest+json .json
+AddType application/javascript .js
+
+<IfModule mod_headers.c>
+    Header set Service-Worker-Allowed "/"
+</IfModule>
+
+RewriteEngine On
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_FILENAME}.php -f
+RewriteRule ^([^\.]+)$ $1.php [NC,L]
+
+# PHP uzantısını gizle
+RewriteCond %{THE_REQUEST} ^[A-Z]{3,}\s([^.]+)\.php [NC]
+RewriteRule ^ %1 [R=301,L] 

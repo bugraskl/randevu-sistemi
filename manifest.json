@@ -1,0 +1,95 @@
+{
+    "name": "Randevu Yönetim Sistemi",
+    "short_name": "Randevu Yönetim Sistemi",
+    "description": "Randevu Yönetim Sistemi",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#212529",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "assets/icons/icon-72x72.png",
+            "sizes": "72x72",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "assets/icons/icon-96x96.png",
+            "sizes": "96x96",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "assets/icons/icon-128x128.png",
+            "sizes": "128x128",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "assets/icons/icon-144x144.png",
+            "sizes": "144x144",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "assets/icons/icon-152x152.png",
+            "sizes": "152x152",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "assets/icons/icon-192x192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "assets/icons/icon-384x384.png",
+            "sizes": "384x384",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "assets/icons/icon-512x512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Yeni Randevu",
+            "short_name": "Randevu",
+            "description": "Yeni randevu oluştur",
+            "url": "/appointments?action=new",
+            "icons": [{ "src": "assets/icons/icon-96x96.png", "sizes": "96x96" }]
+        },
+        {
+            "name": "Danışanlar",
+            "short_name": "Danışanlar",
+            "description": "Danışan listesini görüntüle",
+            "url": "/clients",
+            "icons": [{ "src": "assets/icons/icon-96x96.png", "sizes": "96x96" }]
+        }
+    ],
+    "screenshots": [
+        {
+            "src": "assets/splash/apple-splash-2048-2732.png",
+            "sizes": "2048x2732",
+            "type": "image/png",
+            "platform": "narrow",
+            "label": "Randevu Yönetim Sistemi"
+        }
+    ],
+    "categories": ["business", "productivity"],
+    "prefer_related_applications": false,
+    "related_applications": [],
+    "scope": "/",
+    "dir": "ltr",
+    "lang": "tr",
+    "iarc_rating_id": "",
+    "edge_side_panel": {
+        "preferred_width": 400
+    }
+} 

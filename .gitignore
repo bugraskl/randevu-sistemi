@@ -1,0 +1,52 @@
+# Environment files - Gerçek konfigürasyon değerleri
+env
+.env
+.env.local
+.env.production
+
+# Database configuration files - Eski sistem
+config/database.json
+
+# Log files
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Cache files
+cache/
+*.cache
+
+# Upload files (if any)
+uploads/
+files/
+
+# Session files
+sessions/
+
+# Backup files
+*.bak
+*.backup
+backup/
+
+# Vendor files (if using Composer)
+vendor/
+
+# Node modules (if using npm/yarn)
+node_modules/
+
+# Build files
+build/
+dist/ 
