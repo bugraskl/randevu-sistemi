@@ -13,13 +13,30 @@ if (isset($_SESSION['user_id'])) {
 // Beni Hatırla token'ı varsa kontrol et
 if (isset($_COOKIE['remember_token'])) {
     $db = new Database();
-    $sessionManager = new SessionManager($db->getConnection());
+    $conn = $db->getConnection();
+    $sessionManager = new SessionManager($conn);
     
     $userId = $sessionManager->validateRememberToken($_COOKIE['remember_token']);
     if ($userId) {
-        $_SESSION['user_id'] = $userId;
-        header('Location: dashboard');
-        exit;
+        // Kullanıcı bilgilerini al
+        try {
+            $stmt = $conn->prepare("SELECT id, role, status FROM users WHERE id = ?");
+            $stmt->execute([$userId]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($user && $user['status'] === 'active') {
+                $_SESSION['user_id'] = $user['id'];
+                $_SESSION['user_role'] = $user['role'];
+                $_SESSION['user_status'] = $user['status'];
+                header('Location: dashboard');
+                exit;
+            } else {
+                // Kullanıcı pasif ise token'ı sil
+                $sessionManager->deleteRememberToken($_COOKIE['remember_token']);
+            }
+        } catch (PDOException $e) {
+            error_log("User fetch error: " . $e->getMessage());
+        }
     } else {
         // Geçersiz token varsa cookie'yi sil
         $domain = EnvConfig::get('APP_DOMAIN', 'localhost');

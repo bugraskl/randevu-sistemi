@@ -101,24 +101,27 @@ include 'includes/header.php';
                 <!-- Toast mesajları -->
                 <?php if (isset($_SESSION['success'])): ?>
                 <script>
+                    window.sessionSuccess = '<?php echo addslashes($_SESSION['success']); ?>';
                     document.addEventListener('DOMContentLoaded', function() {
-                        window.toast.show('<?php echo addslashes($_SESSION['success']); ?>', 'success');
+                        window.showToastMessage(window.sessionSuccess, 'success');
                     });
                 </script>
                 <?php unset($_SESSION['success']); endif; ?>
 
                 <?php if (isset($_SESSION['error'])): ?>
                 <script>
+                    window.sessionError = '<?php echo addslashes($_SESSION['error']); ?>';
                     document.addEventListener('DOMContentLoaded', function() {
-                        window.toast.show('<?php echo addslashes($_SESSION['error']); ?>', 'error');
+                        window.showToastMessage(window.sessionError, 'error');
                     });
                 </script>
                 <?php unset($_SESSION['error']); endif; ?>
 
                 <?php if (isset($_SESSION['warning'])): ?>
                 <script>
+                    window.sessionWarning = '<?php echo addslashes($_SESSION['warning']); ?>';
                     document.addEventListener('DOMContentLoaded', function() {
-                        window.toast.show('<?php echo addslashes($_SESSION['warning']); ?>', 'warning');
+                        window.showToastMessage(window.sessionWarning, 'warning');
                     });
                 </script>
                 <?php unset($_SESSION['warning']); endif; ?>

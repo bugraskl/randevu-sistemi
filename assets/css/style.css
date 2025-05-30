@@ -596,8 +596,7 @@ a, button {
 
 .appointment-item .appointment-time {
     color: var(--corp-text-muted);
-    font-size: 12px;
-    margin-top: var(--corp-spacing-xs);
+    font-size: 0.8rem;
 }
 
 /* Past Appointments */
@@ -1308,5 +1307,145 @@ select.form-control option:checked {
 @keyframes toast-progress {
     from { transform: scaleX(1); }
     to { transform: scaleX(0); }
+}
+
+/* Dashboard Yaklaşan Randevular - Soft Renkler */
+.soft-blue {
+    background-color: #e8f4fd !important;
+    border-left: 4px solid #87ceeb !important;
+}
+
+.soft-green {
+    background-color: #e8f8e8 !important;
+    border-left: 4px solid #98d982 !important;
+}
+
+.soft-cyan {
+    background-color: #e0f9ff !important;
+    border-left: 4px solid #7dd3fc !important;
+}
+
+.soft-yellow {
+    background-color: #fef9e7 !important;
+    border-left: 4px solid #fbbf24 !important;
+}
+
+.soft-pink {
+    background-color: #fdf2f8 !important;
+    border-left: 4px solid #f9a8d4 !important;
+}
+
+.soft-purple {
+    background-color: #f3e8ff !important;
+    border-left: 4px solid #c084fc !important;
+}
+
+.soft-lavender {
+    background-color: #f5f3ff !important;
+    border-left: 4px solid #a78bfa !important;
+}
+
+/* Dashboard Appointment Item Düzenlemesi */
+.appointment-item {
+    transition: all 0.2s ease;
+    border: 1px solid rgba(0,0,0,0.08);
+}
+
+.appointment-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.appointment-main {
+    flex: 1;
+}
+
+.appointment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.appointment-datetime {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.appointment-actions {
+    display: flex;
+    align-items: center;
+    margin-top: 12px;
+}
+
+/* Desktop Düzenlemesi */
+@media (min-width: 768px) {
+    .appointment-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+    }
+    
+    .appointment-actions {
+        margin-left: 15px;
+        flex-shrink: 0;
+    }
+}
+
+/* Mobil Düzenlemesi */
+@media (max-width: 767px) {
+    .appointment-datetime {
+        gap: 15px;
+    }
+    
+    .appointment-actions {
+        justify-content: center;
+        margin-top: 15px;
+        padding-top: 10px;
+        border-top: 1px solid rgba(0,0,0,0.1);
+    }
+    
+    .appointment-actions .btn {
+        flex: 1;
+        max-width: 120px;
+    }
+}
+
+/* Koyu tema için soft renkler */
+body.dark .soft-blue {
+    background-color: #1e3a5f !important;
+    border-left-color: #4a90e2 !important;
+}
+
+body.dark .soft-green {
+    background-color: #1a3c1a !important;
+    border-left-color: #4ade80 !important;
+}
+
+body.dark .soft-cyan {
+    background-color: #1a3d4a !important;
+    border-left-color: #0ea5e9 !important;
+}
+
+body.dark .soft-yellow {
+    background-color: #3c3a1a !important;
+    border-left-color: #fbbf24 !important;
+}
+
+body.dark .soft-pink {
+    background-color: #3c1a2e !important;
+    border-left-color: #f472b6 !important;
+}
+
+body.dark .soft-purple {
+    background-color: #2d1a3c !important;
+    border-left-color: #a855f7 !important;
+}
+
+body.dark .soft-lavender {
+    background-color: #2a1a3c !important;
+    border-left-color: #8b5cf6 !important;
 }
 

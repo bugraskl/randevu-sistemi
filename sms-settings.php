@@ -14,6 +14,13 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+// Admin rolü kontrolü
+if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
+    $_SESSION['error'] = 'Bu sayfaya erişim yetkiniz bulunmuyor.';
+    header('Location: dashboard');
+    exit();
+}
+
 // Şablonları veritabanından çek
 try {
     $stmt = $db->query("SELECT * FROM sms_templates ORDER BY id");

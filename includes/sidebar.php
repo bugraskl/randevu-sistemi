@@ -51,6 +51,7 @@ if (isset($_SESSION['user_id'])) {
                 Ödemeler
             </a>
         </li>
+        <?php if ($isAdmin): ?>
         <li class="<?php echo $current_page === 'reports' ? 'active' : ''; ?>">
             <a href="reports" class="d-flex align-items-center p-3  text-decoration-none">
                 <i class="bi bi-graph-up me-2"></i>
@@ -63,6 +64,7 @@ if (isset($_SESSION['user_id'])) {
                 SMS Ayarları
             </a>
         </li>
+        <?php endif; ?>
         <li class="<?php echo $current_page === 'user-settings' ? 'active' : ''; ?>">
             <a href="user-settings" class="d-flex align-items-center p-3  text-decoration-none">
                 <i class="bi bi-gear me-2"></i>

@@ -113,17 +113,6 @@ include 'includes/header.php';
     opacity: 1;
 }
 
-.appointment-item {
-    font-size: 0.8rem;
-    padding: 2px 4px;
-    margin: 2px 0;
-    border-radius: 3px;
-    cursor: pointer;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
 .appointment-item.past {
     background: #ffc107;
     color: #000;
@@ -307,24 +296,32 @@ include 'includes/header.php';
 
                 <!-- Yaklaşan Randevular -->
                 <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Yaklaşan Randevular</h5>
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="bi bi-calendar-check me-2"></i>
+                            Yaklaşan Randevular
+                        </h5>
+                        <a href="appointments" class="btn btn-sm btn-primary">
+                            <i class="bi bi-calendar3"></i> Tümünü Görüntüle
+                        </a>
                     </div>
                     <div class="card-body">
                         <?php if (count($today_appointments_list) > 0): ?>
                             <?php foreach ($today_appointments_list as $appointment): 
                                 $appointment_date = strtotime($appointment['appointment_date']);
+                                $appointment_datetime = strtotime($appointment['appointment_date'] . ' ' . $appointment['appointment_time']);
+                                $now = time();
                                 $day_name = date('l', $appointment_date);
                                 
-                                // Günlere göre arka plan renkleri
+                                // Günlere göre arka plan renkleri (açık/soft tonlar)
                                 $bg_colors = [
-                                    'Monday' => 'bg-primary bg-opacity-10',
-                                    'Tuesday' => 'bg-success bg-opacity-10',
-                                    'Wednesday' => 'bg-info bg-opacity-10',
-                                    'Thursday' => 'bg-warning bg-opacity-10',
-                                    'Friday' => 'bg-danger bg-opacity-10',
-                                    'Saturday' => 'bg-secondary bg-opacity-10',
-                                    'Sunday' => 'bg-dark bg-opacity-10'
+                                    'Monday' => 'soft-blue',
+                                    'Tuesday' => 'soft-green',
+                                    'Wednesday' => 'soft-cyan',
+                                    'Thursday' => 'soft-yellow',
+                                    'Friday' => 'soft-pink',
+                                    'Saturday' => 'soft-purple',
+                                    'Sunday' => 'soft-lavender'
                                 ];
                                 
                                 $bg_class = $bg_colors[$day_name];
@@ -339,30 +336,76 @@ include 'includes/header.php';
                                     'Saturday' => 'Cumartesi',
                                     'Sunday' => 'Pazar'
                                 ];
+                                
+                                // Ödeme durumunu kontrol et
+                                $payment_status = '';
+                                try {
+                                    $payment_stmt = $db->prepare("SELECT id FROM payments WHERE appointment_id = ?");
+                                    $payment_stmt->execute([$appointment['id']]);
+                                    $payment_exists = $payment_stmt->fetch();
+                                    $payment_status = $payment_exists ? 'paid' : 'unpaid';
+                                } catch(PDOException $e) {
+                                    $payment_status = 'unknown';
+                                }
                             ?>
                             <div class="appointment-item <?php echo $bg_class; ?> mb-2 p-3 rounded">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div>
-                                        <div class="client-name fw-bold"><?php echo htmlspecialchars($appointment['client_name']); ?></div>
-                                        <div class="appointment-time">
+                                <div class="appointment-main">
+                                    <div class="appointment-header">
+                                        <div class="client-name fw-bold">
+                                            <i class="bi bi-person-circle me-1"></i>
+                                            <?php echo htmlspecialchars($appointment['client_name']); ?>
+                                        </div>
+                                        <?php if ($payment_status === 'paid'): ?>
+                                            <span class="badge bg-success">Ödendi</span>
+                                        <?php elseif ($payment_status === 'unpaid' && strtotime($appointment['appointment_date'] . ' ' . $appointment['appointment_time']) < time()): ?>
+                                            <span class="badge bg-warning">Ödenmedi</span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="appointment-datetime">
+                                        <div class="appointment-day">
                                             <span class="badge bg-primary"><?php echo $turkish_days[$day_name]; ?></span>
-                                            <?php 
-                                            if (date('Y-m-d') == date('Y-m-d', $appointment_date)) {
-                                                echo 'Bugün';
-                                            } else {
-                                                echo date('d.m.Y', $appointment_date);
-                                            }
-                                            ?>
+                                            <span class="ms-1">
+                                                <?php 
+                                                if (date('Y-m-d') == date('Y-m-d', $appointment_date)) {
+                                                    echo 'Bugün';
+                                                } elseif (date('Y-m-d', strtotime('+1 day')) == date('Y-m-d', $appointment_date)) {
+                                                    echo 'Yarın';
+                                                } else {
+                                                    echo date('d.m.Y', $appointment_date);
+                                                }
+                                                ?>
+                                            </span>
+                                        </div>
+                                        <div class="appointment-time">
+                                            <i class="bi bi-clock me-1"></i>
+                                            <span class="fw-semibold"><?php echo date('H:i', strtotime($appointment['appointment_time'])); ?></span>
                                         </div>
                                     </div>
-                                    <a href="appointments" class="btn btn-sm btn-outline-primary">
-                                        <i class="bi bi-eye"></i> Detay
+                                </div>
+                                <div class="appointment-actions">
+                                    <a href="client-details?id=<?php echo $appointment['client_id']; ?>" class="btn btn-sm btn-outline-primary me-1" title="Danışan Detayı">
+                                        <i class="bi bi-person"></i>
                                     </a>
+                                    <a href="appointments" class="btn btn-sm btn-outline-secondary me-1" title="Randevu Detayı">
+                                        <i class="bi bi-calendar-check"></i>
+                                    </a>
+                                    <?php if ($payment_status === 'unpaid' && strtotime($appointment['appointment_date'] . ' ' . $appointment['appointment_time']) < time()): ?>
+                                    <a href="payments" class="btn btn-sm btn-warning" title="Ödeme Al">
+                                        <i class="bi bi-cash"></i>
+                                    </a>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                             <?php endforeach; ?>
                         <?php else: ?>
-                            <div class="text-muted">Yaklaşan randevu bulunmuyor.</div>
+                            <div class="text-center py-4">
+                                <i class="bi bi-calendar-x display-1 text-muted mb-3"></i>
+                                <h6 class="text-muted">Yaklaşan randevu bulunmuyor</h6>
+                                <p class="text-muted mb-3">Yeni randevular oluşturmak için randevular sayfasını ziyaret edebilirsiniz.</p>
+                                <a href="appointments" class="btn btn-primary">
+                                    <i class="bi bi-plus-circle me-2"></i>Yeni Randevu Oluştur
+                                </a>
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>

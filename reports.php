@@ -14,6 +14,13 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
+// Admin rolü kontrolü
+if (!isset($_SESSION['user_role']) || $_SESSION['user_role'] !== 'admin') {
+    $_SESSION['error'] = 'Bu sayfaya erişim yetkiniz bulunmuyor.';
+    header('Location: dashboard');
+    exit();
+}
+
 // Türkçe ay isimleri
 $aylar = [
     'January' => 'Ocak',
