@@ -32,13 +32,37 @@ try {
 
 // Şablon güncelleme işlemi
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_template'])) {
+    // Debug: POST verilerini kontrol et
+    error_log("SMS Settings POST Data: " . print_r($_POST, true));
+    
+    // Veri kontrolü
+    if (empty($_POST['template_text']) || empty($_POST['template_id'])) {
+        $_SESSION['error'] = "Gerekli alanlar eksik.";
+        header('Location: sms-settings');
+        exit();
+    }
+    
     try {
+        // Debug: SQL sorgusunu logla
+        error_log("SMS Template Update - ID: " . $_POST['template_id'] . ", Text: " . $_POST['template_text']);
+        
         $stmt = $db->prepare("UPDATE sms_templates SET template_text = ? WHERE id = ?");
-        $stmt->execute([$_POST['template_text'], $_POST['template_id']]);
-        $_SESSION['success'] = "SMS şablonu başarıyla güncellendi.";
+        $result = $stmt->execute([$_POST['template_text'], $_POST['template_id']]);
+        
+        // Debug: Etkilenen satır sayısını kontrol et
+        $rowCount = $stmt->rowCount();
+        error_log("SMS Template Update - Affected rows: " . $rowCount);
+        
+        if ($rowCount > 0) {
+            $_SESSION['success'] = "SMS şablonu başarıyla güncellendi.";
+        } else {
+            $_SESSION['warning'] = "Herhangi bir değişiklik yapılmadı veya şablon bulunamadı.";
+        }
+        
         header('Location: sms-settings');
         exit();
     } catch(PDOException $e) {
+        error_log("SMS Template Update Error: " . $e->getMessage());
         $_SESSION['error'] = "SMS şablonu güncellenirken bir hata oluştu: " . $e->getMessage();
     }
 }
@@ -70,24 +94,6 @@ include 'includes/header.php';
             </nav>
 
             <div class="container-fluid p-4">
-                <?php if (isset($_SESSION['success'])): ?>
-                <script>
-                    window.sessionSuccess = '<?php echo addslashes($_SESSION['success']); ?>';
-                    document.addEventListener('DOMContentLoaded', function() {
-                        window.showToastMessage(window.sessionSuccess, 'success');
-                    });
-                </script>
-                <?php unset($_SESSION['success']); endif; ?>
-
-                <?php if (isset($_SESSION['error'])): ?>
-                <script>
-                    window.sessionError = '<?php echo addslashes($_SESSION['error']); ?>';
-                    document.addEventListener('DOMContentLoaded', function() {
-                        window.showToastMessage(window.sessionError, 'error');
-                    });
-                </script>
-                <?php unset($_SESSION['error']); endif; ?>
-
                 <div class="row">
                     <div class="col-12">
                         <div class="card">
@@ -120,7 +126,7 @@ include 'includes/header.php';
                                         }
                                         ?>
                                     </h6>
-                                    <form method="POST" class="needs-validation" novalidate>
+                                    <form method="POST" class="sms-template-form">
                                         <input type="hidden" name="template_id" value="<?php echo $template['id']; ?>">
                                         <div class="mb-3">
                                             <textarea class="form-control" name="template_text" rows="3" required><?php echo htmlspecialchars($template['template_text']); ?></textarea>
@@ -139,8 +145,4 @@ include 'includes/header.php';
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/js/script.js"></script>
-    <script src="assets/js/toast.js"></script>
-</body>
-</html> 
+<?php include 'includes/footer.php'; ?> 

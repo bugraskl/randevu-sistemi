@@ -1,6 +1,9 @@
 <?php
 require_once __DIR__ . '/env.php';
 
+// Geliştirme modu tanımlaması (cache busting için)
+define('DEVELOPMENT_MODE', EnvConfig::isDevelopment() || EnvConfig::isDebug());
+
 try {
     // Environment değişkenlerinden database bilgilerini al
     $host = EnvConfig::get('DB_HOST', 'localhost');

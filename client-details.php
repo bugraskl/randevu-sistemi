@@ -45,11 +45,16 @@ try {
                    ELSE 'future'
                END as date_status,
                TIME_FORMAT(a.appointment_time, '%H:%i') as formatted_time,
+               p.id as payment_id,
+               p.amount,
+               p.payment_method,
+               p.payment_date,
                CASE 
-                   WHEN EXISTS (SELECT 1 FROM payments p WHERE p.appointment_id = a.id) THEN 'paid'
+                   WHEN p.id IS NOT NULL THEN 'paid'
                    ELSE 'unpaid'
                END as payment_status
         FROM appointments a 
+        LEFT JOIN payments p ON a.id = p.appointment_id
         WHERE a.client_id = ? 
         ORDER BY a.appointment_date DESC, a.appointment_time DESC
     ");
@@ -116,36 +121,6 @@ include 'includes/header.php';
             </nav>
 
             <div class="container-fluid py-4">
-                <?php if (isset($_SESSION['error'])): ?>
-                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
-                        <?php 
-                        echo $_SESSION['error'];
-                        unset($_SESSION['error']);
-                        ?>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                <?php endif; ?>
-
-                <?php if (isset($_SESSION['success'])): ?>
-                    <div class="alert alert-success alert-dismissible fade show" role="alert">
-                        <?php 
-                        echo $_SESSION['success'];
-                        unset($_SESSION['success']);
-                        ?>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                <?php endif; ?>
-
-                <?php if (isset($_SESSION['warning'])): ?>
-                    <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                        <?php 
-                        echo $_SESSION['warning'];
-                        unset($_SESSION['warning']);
-                        ?>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                <?php endif; ?>
-
                 <div class="row">
                     <div class="col-md-4">
                         <div class="card mb-4">
@@ -228,6 +203,10 @@ include 'includes/header.php';
                                                     <?php if ($appointment['payment_status'] === 'unpaid'): ?>
                                                     <button type="button" class="btn btn-sm btn-success" onclick="addPayment(<?php echo $appointment['id']; ?>)">
                                                         <i class="bi bi-cash"></i>
+                                                    </button>
+                                                    <?php elseif ($appointment['payment_status'] === 'paid'): ?>
+                                                    <button type="button" class="btn btn-sm btn-warning" onclick="cancelPayment(<?php echo $appointment['payment_id']; ?>, '<?php echo date('d.m.Y H:i', strtotime($appointment['appointment_date'] . ' ' . $appointment['formatted_time'])); ?>', '<?php echo number_format($appointment['amount'], 2, ',', '.'); ?>')">
+                                                        <i class="bi bi-x-circle"></i>
                                                     </button>
                                                     <?php endif; ?>
                                                     <button type="button" class="btn btn-sm btn-danger" onclick="deleteAppointment(<?php echo $appointment['id']; ?>, '<?php echo date('d.m.Y', strtotime($appointment['appointment_date'])); ?>', '<?php echo date('H:i', strtotime($appointment['formatted_time'])); ?>')">
@@ -424,8 +403,43 @@ include 'includes/header.php';
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/js/script.js"></script>
+    <!-- Ödeme İptal Modal -->
+    <div class="modal fade" id="cancelPaymentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Ödeme İptal Et</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Dikkat!</strong> Bu işlem geri alınamaz.
+                    </div>
+                    <p>
+                        <strong><?php echo htmlspecialchars($client['name']); ?></strong> isimli danışanın 
+                        <strong><span id="cancel_payment_date"></span></strong> tarihli randevusu için alınan 
+                        <strong><span id="cancel_payment_amount"></span> ₺</strong> ödemeyi iptal etmek istediğinizden emin misiniz?
+                    </p>
+                    <p class="text-muted">
+                        Ödeme iptal edildiğinde, randevu "ödenmedi" durumuna geçecektir.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <form action="process/cancel-payment" method="POST" style="display: inline;">
+                        <input type="hidden" name="payment_id" id="cancel_payment_id">
+                        <input type="hidden" name="client_id" value="<?php echo $client['id']; ?>">
+                        <input type="hidden" name="redirect" value="client-details">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-x-circle me-1"></i> Ödeme İptal Et
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
     // Randevu düzenleme modalını açma fonksiyonu
     function editAppointment(id, date, time, notes) {
@@ -454,6 +468,16 @@ include 'includes/header.php';
         document.getElementById('payment_appointment_id').value = id;
         new bootstrap.Modal(document.getElementById('addPaymentModal')).show();
     }
+
+    // Ödeme iptal modalını açma fonksiyonu
+    function cancelPayment(paymentId, date, amount) {
+        document.getElementById('cancel_payment_id').value = paymentId;
+        document.getElementById('cancel_payment_date').textContent = date;
+        document.getElementById('cancel_payment_amount').textContent = amount;
+        new bootstrap.Modal(document.getElementById('cancelPaymentModal')).show();
+    }
     </script>
 </body>
-</html> 
+</html>
+
+<?php include 'includes/footer.php'; ?> 

@@ -98,40 +98,13 @@ include 'includes/header.php';
             </nav>
 
             <div class="container-fluid p-4">
-                <!-- Toast mesajları -->
-                <?php if (isset($_SESSION['success'])): ?>
-                <script>
-                    window.sessionSuccess = '<?php echo addslashes($_SESSION['success']); ?>';
-                    document.addEventListener('DOMContentLoaded', function() {
-                        window.showToastMessage(window.sessionSuccess, 'success');
-                    });
-                </script>
-                <?php unset($_SESSION['success']); endif; ?>
-
-                <?php if (isset($_SESSION['error'])): ?>
-                <script>
-                    window.sessionError = '<?php echo addslashes($_SESSION['error']); ?>';
-                    document.addEventListener('DOMContentLoaded', function() {
-                        window.showToastMessage(window.sessionError, 'error');
-                    });
-                </script>
-                <?php unset($_SESSION['error']); endif; ?>
-
-                <?php if (isset($_SESSION['warning'])): ?>
-                <script>
-                    window.sessionWarning = '<?php echo addslashes($_SESSION['warning']); ?>';
-                    document.addEventListener('DOMContentLoaded', function() {
-                        window.showToastMessage(window.sessionWarning, 'warning');
-                    });
-                </script>
-                <?php unset($_SESSION['warning']); endif; ?>
-
+                <!-- Kullanıcı Listesi -->
                 <div class="card">
                     <div class="card-header">
                         <div class="d-flex justify-content-between align-items-center">
                             <h5 class="mb-0">Kullanıcı Yönetimi</h5>
                             <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
-                                <i class="bi bi-person-plus"></i> Yeni Kullanıcı
+                                <i class="bi bi-person-plus"></i> Yeni Kullanıcı Ekle
                             </button>
                         </div>
                     </div>
@@ -390,12 +363,6 @@ include 'includes/header.php';
     <?php endif; ?>
     <?php endforeach; ?>
 
-    <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/js/script.js"></script>
-    <script src="assets/js/toast.js"></script>
-    <script src="assets/js/user-management.js"></script>
-
     <script>
         // Global değişkenler
         window.currentUserId = <?php echo $_SESSION['user_id']; ?>;
@@ -509,5 +476,5 @@ include 'includes/header.php';
             });
         });
     </script>
-</body>
-</html> 
+
+<?php include 'includes/footer.php'; ?> 

@@ -47,27 +47,33 @@ $kazanc_data = [];
 $randevu_data = [];
 $yeni_danisan_data = [];
 
+// DateTime kullanarak güvenli ay hesaplama
+$current_date = new DateTime();
+$current_date->setDate($current_date->format('Y'), $current_date->format('n'), 1); // Ayın ilk günü
+
 for ($i = 5; $i >= 0; $i--) {
-    $month = date('Y-m', strtotime("-$i months"));
-    $month_name = date('F', strtotime($month));
-    $year = date('Y', strtotime($month));
-    $labels[] = $aylar[$month_name] . ' ' . $year;
+    $date = clone $current_date;
+    $date->modify("-$i months");
     
+    $month_name = $aylar[$date->format('F')];
+    $year = $date->format('Y');
+    $labels[] = $month_name . ' ' . $year;
+
     // Ay başı ve sonu
-    $month_start = date('Y-m-01', strtotime($month));
-    $month_end = date('Y-m-t', strtotime($month));
-    
+    $month_start = $date->format('Y-m-01');
+    $month_end = $date->format('Y-m-t');
+
     try {
         // Aylık kazanç
         $stmt = $db->prepare("SELECT COALESCE(SUM(amount), 0) as total FROM payments WHERE payment_date BETWEEN ? AND ?");
         $stmt->execute([$month_start, $month_end]);
         $kazanc_data[] = $stmt->fetch()['total'];
-        
+
         // Aylık randevu sayısı
         $stmt = $db->prepare("SELECT COUNT(*) as total FROM appointments WHERE appointment_date BETWEEN ? AND ?");
         $stmt->execute([$month_start, $month_end]);
         $randevu_data[] = $stmt->fetch()['total'];
-        
+
         // Aylık yeni danışan sayısı
         $stmt = $db->prepare("
             SELECT COUNT(DISTINCT client_id) as total 
@@ -81,8 +87,8 @@ for ($i = 5; $i >= 0; $i--) {
         ");
         $stmt->execute([$month_start, $month_end, $month_start]);
         $yeni_danisan_data[] = $stmt->fetch()['total'];
-        
-    } catch(PDOException $e) {
+
+    } catch (PDOException $e) {
         $kazanc_data[] = 0;
         $randevu_data[] = 0;
         $yeni_danisan_data[] = 0;
@@ -127,7 +133,7 @@ try {
     $stmt->execute([$start_date, $end_date]);
     $client_stats = $stmt->fetch();
 
-} catch(PDOException $e) {
+} catch (PDOException $e) {
     $_SESSION['error'] = "Raporlar alınırken bir hata oluştu: " . $e->getMessage();
     $appointment_stats = ['total_appointments' => 0, 'past_appointments' => 0, 'today_appointments' => 0, 'future_appointments' => 0];
     $payment_stats = ['total_payments' => 0, 'total_amount' => 0, 'cash_payments' => 0, 'credit_card_payments' => 0, 'bank_transfer_payments' => 0];
@@ -137,8 +143,6 @@ try {
 // Header'ı dahil et
 include 'includes/header.php';
 ?>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <body class="<?php echo $themeClass; ?>">
     <div class="wrapper">
@@ -163,33 +167,6 @@ include 'includes/header.php';
             </nav>
 
             <div class="container-fluid p-4">
-                <?php if (isset($_SESSION['success'])): ?>
-                <script>
-                    window.sessionSuccess = '<?php echo addslashes($_SESSION['success']); ?>';
-                    document.addEventListener('DOMContentLoaded', function() {
-                        window.showToastMessage(window.sessionSuccess, 'success');
-                    });
-                </script>
-                <?php unset($_SESSION['success']); endif; ?>
-
-                <?php if (isset($_SESSION['error'])): ?>
-                <script>
-                    window.sessionError = '<?php echo addslashes($_SESSION['error']); ?>';
-                    document.addEventListener('DOMContentLoaded', function() {
-                        window.showToastMessage(window.sessionError, 'error');
-                    });
-                </script>
-                <?php unset($_SESSION['error']); endif; ?>
-
-                <?php if (isset($_SESSION['warning'])): ?>
-                <script>
-                    window.sessionWarning = '<?php echo addslashes($_SESSION['warning']); ?>';
-                    document.addEventListener('DOMContentLoaded', function() {
-                        window.showToastMessage(window.sessionWarning, 'warning');
-                    });
-                </script>
-                <?php unset($_SESSION['warning']); endif; ?>
-
                 <div class="row">
                     <!-- Grafikler -->
                     <div class="col-12">
@@ -216,98 +193,99 @@ include 'includes/header.php';
                             </div>
                         </div>
                     </div>
+
                 </div>
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/js/script.js"></script>
-    <script src="assets/js/toast.js"></script>
     <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Kazanç ve Randevu Grafiği
-        const kazancCtx = document.getElementById('kazancChart').getContext('2d');
-        new Chart(kazancCtx, {
-            type: 'line',
-            data: {
-                labels: <?php echo json_encode($labels); ?>,
-                datasets: [{
-                    label: 'Kazanç (₺)',
-                    data: <?php echo json_encode($kazanc_data); ?>,
-                    borderColor: 'rgb(75, 192, 192)',
-                    tension: 0.1,
-                    yAxisID: 'y'
-                }, {
-                    label: 'Randevu Sayısı',
-                    data: <?php echo json_encode($randevu_data); ?>,
-                    borderColor: 'rgb(255, 99, 132)',
-                    tension: 0.1,
-                    yAxisID: 'y1'
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
+        document.addEventListener('DOMContentLoaded', function () {
+            // Kazanç ve Randevu Grafiği
+            const kazancCtx = document.getElementById('kazancChart').getContext('2d');
+            new Chart(kazancCtx, {
+                type: 'line',
+                data: {
+                    labels: <?php echo json_encode($labels); ?>,
+                    datasets: [{
+                        label: 'Kazanç (₺)',
+                        data: <?php echo json_encode($kazanc_data); ?>,
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1,
+                        yAxisID: 'y'
+                    }, {
+                        label: 'Randevu Sayısı',
+                        data: <?php echo json_encode($randevu_data); ?>,
+                        borderColor: 'rgb(255, 99, 132)',
+                        tension: 0.1,
+                        yAxisID: 'y1'
+                    }]
                 },
-                scales: {
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: {
-                            display: true,
-                            text: 'Kazanç (₺)'
-                        }
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
                     },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: {
+                    scales: {
+                        y: {
+                            type: 'linear',
                             display: true,
-                            text: 'Randevu Sayısı'
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Kazanç (₺)'
+                            }
                         },
-                        grid: {
-                            drawOnChartArea: false
-                        }
-                    }
-                }
-            }
-        });
-
-        // Yeni Danışan Grafiği
-        const yeniDanisanCtx = document.getElementById('yeniDanisanChart').getContext('2d');
-        new Chart(yeniDanisanCtx, {
-            type: 'bar',
-            data: {
-                labels: <?php echo json_encode($labels); ?>,
-                datasets: [{
-                    label: 'Yeni Danışan Sayısı',
-                    data: <?php echo json_encode($yeni_danisan_data); ?>,
-                    backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                    borderColor: 'rgb(54, 162, 235)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
+                        y1: {
+                            type: 'linear',
                             display: true,
-                            text: 'Danışan Sayısı'
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Randevu Sayısı'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
                         }
                     }
                 }
-            }
+            });
+
+            // Yeni Danışan Grafiği
+            const yeniDanisanCtx = document.getElementById('yeniDanisanChart').getContext('2d');
+            new Chart(yeniDanisanCtx, {
+                type: 'bar',
+                data: {
+                    labels: <?php echo json_encode($labels); ?>,
+                    datasets: [{
+                        label: 'Yeni Danışan Sayısı',
+                        data: <?php echo json_encode($yeni_danisan_data); ?>,
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgb(54, 162, 235)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Danışan Sayısı'
+                            }
+                        }
+                    }
+                }
+            });
         });
-    });
     </script>
 </body>
-</html> 
+
+</html>
+
+<?php include 'includes/footer.php'; ?>

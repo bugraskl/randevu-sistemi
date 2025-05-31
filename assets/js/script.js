@@ -61,44 +61,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
-    // Arama fonksiyonu
-    const searchInput = document.getElementById('searchInput');
-    const searchButton = document.getElementById('searchButton');
-    const tableRows = document.querySelectorAll('tbody tr');
-
-    function performSearch() {
-        const searchTerm = searchInput.value.toLowerCase().trim();
-        
-        tableRows.forEach(row => {
-            const name = row.cells[0].textContent.toLowerCase();
-            const phone = row.cells[1] ? row.cells[1].textContent.toLowerCase() : '';
-            
-            if (name.includes(searchTerm) || phone.includes(searchTerm)) {
-                row.style.display = '';
-            } else {
-                row.style.display = 'none';
-            }
-        });
-    }
-
-    // Arama butonuna tıklandığında
-    if (searchButton) {
-        searchButton.addEventListener('click', performSearch);
-    }
-
-    // Enter tuşuna basıldığında
-    if (searchInput) {
-        searchInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                performSearch();
-            }
-        });
-
-        // Input değiştiğinde anlık arama
-        searchInput.addEventListener('input', performSearch);
-    }
-
     // Form doğrulama
     const forms = document.querySelectorAll('.needs-validation');
     forms.forEach(form => {
@@ -262,7 +224,7 @@ window.formatPhone = function(input) {
 };
 
 // Client arama fonksiyonu
-window.performClientSearch = function() {
+window.performClientSearch = function(page = 1) {
     const searchInput = document.getElementById('searchInput');
     const searchButton = document.getElementById('searchButton');
     const searchResultsModal = document.getElementById('searchResultsModal');
@@ -276,60 +238,112 @@ window.performClientSearch = function() {
         return;
     }
 
-    window.setLoadingState(searchButton, true);
+    // Loading göster (sadece ilk sayfa için buton loading'i)
+    if (page === 1) {
+        window.setLoadingState(searchButton, true);
+    }
 
-    fetch(`process/search-clients?term=${encodeURIComponent(searchTerm)}`)
+    fetch(`process/search-clients?term=${encodeURIComponent(searchTerm)}&page=${page}`)
         .then(response => response.json())
         .then(data => {
-            searchResults.innerHTML = '';
-            if (data.length === 0) {
-                searchResults.innerHTML = '<div class="list-group-item">Danışan bulunamadı.</div>';
-            } else {
-                data.forEach(client => {
-                    const item = document.createElement('div');
-                    item.className = 'list-group-item';
-                    item.innerHTML = `
-                        <div class="d-flex w-100 justify-content-between align-items-center">
-                            <div>
-                                <h5 class="mb-1">${client.name}</h5>
-                                <p class="mb-1">
-                                    <span class="badge bg-primary me-2">${client.phone}</span>
-                                    ${client.email ? `<span class="badge bg-info">${client.email}</span>` : ''}
-                                </p>
-                            </div>
-                            <div>
-                                <a href="client-details?id=${client.id}" class="btn btn-sm btn-dark">
-                                    <i class="bi bi-eye"></i>
-                                </a>
-                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editClientModal${client.id}">
-                                    <i class="bi bi-pencil"></i>
-                                </button>
-                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteClientModal${client.id}">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
+            if (data.success) {
+                // Modal başlığını güncelle
+                const modalTitle = searchResultsModal.querySelector('.modal-title');
+                if (modalTitle) {
+                    modalTitle.textContent = `"${data.search_term}" için ${data.pagination.total_records} sonuç bulundu`;
+                }
+
+                // İlk sayfa ise sonuçları temizle
+                if (page === 1) {
+                    searchResults.innerHTML = '';
+                }
+                
+                if (data.clients.length === 0 && page === 1) {
+                    searchResults.innerHTML = `
+                        <div class="text-center py-4">
+                            <i class="bi bi-person-x fs-1 text-muted mb-3"></i>
+                            <h5 class="text-muted">Danışan bulunamadı</h5>
+                            <p class="text-muted mb-0">"${data.search_term}" için sonuç bulunamadı</p>
                         </div>
                     `;
-                    searchResults.appendChild(item);
-                });
-            }
-            
-            // Modal göster
-            if (searchResultsModal && typeof bootstrap !== 'undefined') {
-                const modal = new bootstrap.Modal(searchResultsModal);
-                modal.show();
+                } else {
+                    data.clients.forEach(client => {
+                        const item = document.createElement('div');
+                        item.className = 'list-group-item';
+                        item.innerHTML = `
+                            <div class="d-flex w-100 justify-content-between align-items-start">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center mb-2">
+                                        <h5 class="mb-0 me-3">${client.name}</h5>
+                                        <span class="badge bg-info">${client.appointment_count} randevu</span>
+                                    </div>
+                                    <p class="mb-1">
+                                        <i class="bi bi-telephone me-1"></i> ${client.phone}
+                                        ${client.email ? `<span class="ms-3"><i class="bi bi-envelope me-1"></i> ${client.email}</span>` : ''}
+                                    </p>
+                                    ${client.address ? `<p class="mb-1 text-muted"><i class="bi bi-geo-alt me-1"></i> ${client.address}</p>` : ''}
+                                    ${client.notes ? `<p class="mb-1 text-muted"><i class="bi bi-journal-text me-1"></i> ${client.notes}</p>` : ''}
+                                    <small class="text-muted">Kayıt tarihi: ${client.created_at_formatted}</small>
+                                </div>
+                                <div class="btn-group ms-3" role="group">
+                                    <a href="client-details?id=${client.id}" class="btn btn-sm btn-dark" title="Detaylar">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                    <button type="button" class="btn btn-sm btn-primary" onclick="editClientFromSearch(${client.id})" title="Düzenle">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-danger" onclick="deleteClientFromSearch(${client.id}, '${client.name}')" title="Sil">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        searchResults.appendChild(item);
+                    });
+                    
+                    // Sayfalama ekle
+                    if (data.pagination.total_pages > 1) {
+                        const paginationDiv = document.createElement('div');
+                        paginationDiv.className = 'mt-3 d-flex justify-content-between align-items-center';
+                        paginationDiv.innerHTML = `
+                            <div class="text-muted">
+                                Sayfa ${data.pagination.current_page} / ${data.pagination.total_pages} 
+                                (Toplam ${data.pagination.total_records} kayıt)
+                            </div>
+                            <div class="btn-group" role="group">
+                                ${data.pagination.has_prev ? 
+                                    `<button type="button" class="btn btn-sm btn-outline-primary" onclick="window.performClientSearch(${data.pagination.current_page - 1})">
+                                        <i class="bi bi-chevron-left"></i> Önceki
+                                    </button>` : ''
+                                }
+                                ${data.pagination.has_next ? 
+                                    `<button type="button" class="btn btn-sm btn-outline-primary" onclick="window.performClientSearch(${data.pagination.current_page + 1})">
+                                        Sonraki <i class="bi bi-chevron-right"></i>
+                                    </button>` : ''
+                                }
+                            </div>
+                        `;
+                        searchResults.appendChild(paginationDiv);
+                    }
+                }
+                
+                // Modal göster (sadece ilk sayfa için)
+                if (page === 1 && searchResultsModal && typeof bootstrap !== 'undefined') {
+                    const modal = new bootstrap.Modal(searchResultsModal);
+                    modal.show();
+                }
+            } else {
+                window.showToastMessage(data.error || data.message || 'Arama sırasında bir hata oluştu.', 'error');
             }
         })
         .catch(error => {
             console.error('Arama hatası:', error);
-            searchResults.innerHTML = '<div class="list-group-item text-danger">Arama sırasında bir hata oluştu.</div>';
-            if (searchResultsModal && typeof bootstrap !== 'undefined') {
-                const modal = new bootstrap.Modal(searchResultsModal);
-                modal.show();
-            }
+            window.showToastMessage('Arama sırasında bir hata oluştu.', 'error');
         })
         .finally(() => {
-            window.setLoadingState(searchButton, false);
+            if (page === 1) {
+                window.setLoadingState(searchButton, false);
+            }
         });
 };
 
@@ -337,17 +351,35 @@ window.performClientSearch = function() {
 window.initializeClientPage = function() {
     const searchInput = document.getElementById('searchInput');
     const searchButton = document.getElementById('searchButton');
+    let searchTimeout;
     
     if (searchButton) {
         searchButton.addEventListener('click', window.performClientSearch);
     }
     
     if (searchInput) {
+        // Enter tuşu ile arama
         searchInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 window.performClientSearch();
             }
+        });
+        
+        // Anlık arama (typing sırasında)
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            const searchTerm = this.value.trim();
+            
+            // Eğer 2 karakterden azsa arama yapma
+            if (searchTerm.length < 2) {
+                return;
+            }
+            
+            // 500ms bekle, ardından arama yap
+            searchTimeout = setTimeout(() => {
+                window.performClientSearch();
+            }, 500);
         });
     }
 };
@@ -362,7 +394,17 @@ window.initializeAppointmentsPage = function() {
         searchButton.addEventListener('click', function() {
             const selectedDate = searchDate.value;
             if (selectedDate) {
-                window.location.href = `?date=${selectedDate}&view=${new URLSearchParams(window.location.search).get('view') || 'list'}`;
+                window.performAppointmentSearch(selectedDate);
+            } else {
+                window.showToastMessage('Lütfen bir tarih seçiniz.', 'warning');
+            }
+        });
+        
+        // Enter tuşu ile arama
+        searchDate.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                searchButton.click();
             }
         });
     }
@@ -394,6 +436,125 @@ window.initializeAppointmentsPage = function() {
         const listTab = document.getElementById('list-tab');
         if (listTab) listTab.click();
     }
+};
+
+// Randevu arama fonksiyonu
+window.performAppointmentSearch = function(date) {
+    const searchButton = document.getElementById('searchButton');
+    const searchResultsModal = document.getElementById('searchResultsModal');
+    const searchResults = document.getElementById('searchResults');
+    
+    if (!searchResults) return;
+
+    // Loading göster
+    window.setLoadingState(searchButton, true);
+    searchButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Aranıyor...';
+
+    fetch(`process/search-appointments?date=${encodeURIComponent(date)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Modal başlığını güncelle
+                const modalTitle = searchResultsModal.querySelector('.modal-title');
+                if (modalTitle) {
+                    modalTitle.textContent = `${data.formatted_date} ${data.day_name} - Randevular`;
+                }
+
+                // Arama sonuçlarını göster
+                searchResults.innerHTML = '';
+                
+                if (data.appointments.length === 0) {
+                    searchResults.innerHTML = `
+                        <div class="text-center py-4">
+                            <i class="bi bi-calendar-x fs-1 text-muted mb-3"></i>
+                            <h5 class="text-muted">Bu tarihte randevu bulunamadı</h5>
+                            <p class="text-muted mb-0">${data.formatted_date} ${data.day_name}</p>
+                        </div>
+                    `;
+                } else {
+                    data.appointments.forEach(appointment => {
+                        const appointmentElement = document.createElement('div');
+                        appointmentElement.className = 'list-group-item';
+                        appointmentElement.innerHTML = `
+                            <div class="d-flex w-100 justify-content-between align-items-center">
+                                <div>
+                                    <div class="d-flex align-items-center mb-2">
+                                        <h6 class="mb-0 me-3">${appointment.formatted_time}</h6>
+                                        ${appointment.status_badge}
+                                    </div>
+                                    <h5 class="mb-1">${appointment.client_name}</h5>
+                                    <p class="mb-1">
+                                        <i class="bi bi-telephone me-1"></i> ${appointment.client_phone}
+                                    </p>
+                                    ${appointment.notes ? `<p class="mb-1 text-muted"><i class="bi bi-journal-text me-1"></i> ${appointment.notes}</p>` : ''}
+                                </div>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-sm btn-primary" onclick="editAppointmentFromSearch(${appointment.id})">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-danger" onclick="deleteAppointmentFromSearch(${appointment.id}, '${appointment.formatted_date}', '${appointment.formatted_time}', '${appointment.client_name}')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                        searchResults.appendChild(appointmentElement);
+                    });
+                }
+                
+                // Modal göster
+                if (searchResultsModal && typeof bootstrap !== 'undefined') {
+                    const modal = new bootstrap.Modal(searchResultsModal);
+                    modal.show();
+                }
+            } else {
+                window.showToastMessage(data.error || 'Arama sırasında bir hata oluştu.', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Arama hatası:', error);
+            window.showToastMessage('Arama sırasında bir hata oluştu.', 'error');
+        })
+        .finally(() => {
+            window.setLoadingState(searchButton, false);
+            searchButton.innerHTML = '<i class="bi bi-search"></i> Ara';
+        });
+};
+
+// Arama modalından randevu düzenleme
+window.editAppointmentFromSearch = function(appointmentId) {
+    // Mevcut modal'ı kapat
+    const searchModal = bootstrap.Modal.getInstance(document.getElementById('searchResultsModal'));
+    if (searchModal) {
+        searchModal.hide();
+    }
+    
+    // Düzenleme modalını aç
+    setTimeout(() => {
+        const editModal = document.getElementById('editAppointmentModal' + appointmentId);
+        if (editModal && typeof bootstrap !== 'undefined') {
+            const modal = new bootstrap.Modal(editModal);
+            modal.show();
+        }
+    }, 300);
+};
+
+// Arama modalından randevu silme
+window.deleteAppointmentFromSearch = function(appointmentId, date, time, clientName) {
+    // Mevcut modal'ı kapat
+    const searchModal = bootstrap.Modal.getInstance(document.getElementById('searchResultsModal'));
+    if (searchModal) {
+        searchModal.hide();
+    }
+    
+    // Silme onay modalını aç
+    setTimeout(() => {
+        const deleteModal = document.getElementById('deleteAppointmentModal' + appointmentId);
+        if (deleteModal && typeof bootstrap !== 'undefined') {
+            const modal = new bootstrap.Modal(deleteModal);
+            modal.show();
+        }
+    }, 300);
 };
 
 // Takvim başlatma fonksiyonu
@@ -547,4 +708,60 @@ window.initializeCalendar = function() {
     
     // Takvimi başlat
     updateCalendar();
+};
+
+// Arama modalından client düzenleme
+window.editClientFromSearch = function(clientId) {
+    // Mevcut modal'ı kapat
+    const searchModal = bootstrap.Modal.getInstance(document.getElementById('searchResultsModal'));
+    if (searchModal) {
+        searchModal.hide();
+    }
+    
+    // Düzenleme modalını aç
+    setTimeout(() => {
+        const editModal = document.getElementById('editClientModal' + clientId);
+        if (editModal && typeof bootstrap !== 'undefined') {
+            const modal = new bootstrap.Modal(editModal);
+            modal.show();
+        } else {
+            // Modal bulunamadıysa sayfayı yenile
+            window.location.reload();
+        }
+    }, 300);
+};
+
+// Arama modalından client silme
+window.deleteClientFromSearch = function(clientId, clientName) {
+    // Mevcut modal'ı kapat
+    const searchModal = bootstrap.Modal.getInstance(document.getElementById('searchResultsModal'));
+    if (searchModal) {
+        searchModal.hide();
+    }
+    
+    // Silme onay modalını aç
+    setTimeout(() => {
+        const deleteModal = document.getElementById('deleteClientModal' + clientId);
+        if (deleteModal && typeof bootstrap !== 'undefined') {
+            const modal = new bootstrap.Modal(deleteModal);
+            modal.show();
+        } else {
+            // Modal bulunamadıysa basit confirm kullan
+            if (confirm(`${clientName} adlı danışanı silmek istediğinizden emin misiniz?`)) {
+                // Form submit işlemi
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = 'process/delete-client';
+                
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'client_id';
+                input.value = clientId;
+                
+                form.appendChild(input);
+                document.body.appendChild(form);
+                form.submit();
+            }
+        }
+    }, 300);
 }; 

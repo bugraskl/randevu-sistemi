@@ -29,35 +29,46 @@ if (strlen($selected_month) === 4) {
 
 // Bu ayki toplam kazanç
 try {
-    // Toplam kazanç
+    // Debug: Seçilen ay aralığını logla
+    error_log("Payment stats debug - Selected month: $selected_month, First day: $first_day, Last day: $last_day");
+    
+    // Toplam kazanç - appointment_date kullan (çünkü payments tablosunda appointment_date göre join yapıyoruz)
     $stmt = $db->prepare("
-        SELECT COALESCE(SUM(amount), 0) as total 
-        FROM payments 
-        WHERE payment_date BETWEEN ? AND ?
+        SELECT COALESCE(SUM(p.amount), 0) as total 
+        FROM payments p 
+        JOIN appointments a ON p.appointment_id = a.id
+        WHERE a.appointment_date BETWEEN ? AND ?
     ");
     $stmt->execute([$first_day, $last_day]);
     $monthly_income = $stmt->fetch()['total'];
+    
+    error_log("Payment stats debug - Monthly income: $monthly_income");
 
     // Nakit ve havale/EFT toplamı
     $stmt = $db->prepare("
-        SELECT COALESCE(SUM(amount), 0) as total 
-        FROM payments 
-        WHERE payment_date BETWEEN ? AND ? 
-        AND payment_method IN ('cash', 'bank_transfer')
+        SELECT COALESCE(SUM(p.amount), 0) as total 
+        FROM payments p 
+        JOIN appointments a ON p.appointment_id = a.id
+        WHERE a.appointment_date BETWEEN ? AND ? 
+        AND p.payment_method IN ('cash', 'bank_transfer')
     ");
     $stmt->execute([$first_day, $last_day]);
     $cash_income = $stmt->fetch()['total'];
 
     // Kart toplamı
     $stmt = $db->prepare("
-        SELECT COALESCE(SUM(amount), 0) as total 
-        FROM payments 
-        WHERE payment_date BETWEEN ? AND ? 
-        AND payment_method = 'card'
+        SELECT COALESCE(SUM(p.amount), 0) as total 
+        FROM payments p 
+        JOIN appointments a ON p.appointment_id = a.id
+        WHERE a.appointment_date BETWEEN ? AND ? 
+        AND p.payment_method = 'card'
     ");
     $stmt->execute([$first_day, $last_day]);
     $card_income = $stmt->fetch()['total'];
+    
+    error_log("Payment stats debug - Cash: $cash_income, Card: $card_income");
 } catch(PDOException $e) {
+    error_log("Payment stats error: " . $e->getMessage());
     $_SESSION['error'] = "Toplam kazanç hesaplanırken bir hata oluştu: " . $e->getMessage();
     $monthly_income = 0;
     $cash_income = 0;
@@ -161,84 +172,75 @@ include 'includes/header.php';
             </nav>
 
             <div class="container-fluid p-4">
-                <?php if (isset($_SESSION['success'])): ?>
-                <script>
-                    window.sessionSuccess = '<?php echo addslashes($_SESSION['success']); ?>';
-                    document.addEventListener('DOMContentLoaded', function() {
-                        window.showToastMessage(window.sessionSuccess, 'success');
-                    });
-                </script>
-                <?php unset($_SESSION['success']); endif; ?>
-
-                <?php if (isset($_SESSION['error'])): ?>
-                <script>
-                    window.sessionError = '<?php echo addslashes($_SESSION['error']); ?>';
-                    document.addEventListener('DOMContentLoaded', function() {
-                        window.showToastMessage(window.sessionError, 'error');
-                    });
-                </script>
-                <?php unset($_SESSION['error']); endif; ?>
-
-                <?php if (isset($_SESSION['warning'])): ?>
-                <script>
-                    window.sessionWarning = '<?php echo addslashes($_SESSION['warning']); ?>';
-                    document.addEventListener('DOMContentLoaded', function() {
-                        window.showToastMessage(window.sessionWarning, 'warning');
-                    });
-                </script>
-                <?php unset($_SESSION['warning']); endif; ?>
+                <!-- Ay/Yıl Filtresi -->
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-body">
+                                <form method="GET" class="row g-3 align-items-end" id="monthFilterForm">
+                                    <div class="col-md-12">
+                                        <label for="month" class="form-label">Dönem Seçin</label>
+                                        <select class="form-select" name="month" id="month" onchange="document.getElementById('monthFilterForm').submit();">
+                                            <option value="<?php echo date('Y-m'); ?>" <?php echo $selected_month === date('Y-m') ? 'selected' : ''; ?>>Bu Ay</option>
+                                            <?php
+                                            // DateTime kullanarak güvenli ay hesaplama
+                                            $current_date = new DateTime();
+                                            $current_date->setDate($current_date->format('Y'), $current_date->format('n'), 1);
+                                            
+                                            // Son 12 ayı listele
+                                            for ($i = 1; $i <= 12; $i++) {
+                                                $date = clone $current_date;
+                                                $date->modify("-$i months");
+                                                
+                                                $month = $date->format('Y-m');
+                                                $monthName = $date->format('F Y');
+                                                $turkishMonths = [
+                                                    'January' => 'Ocak', 'February' => 'Şubat', 'March' => 'Mart',
+                                                    'April' => 'Nisan', 'May' => 'Mayıs', 'June' => 'Haziran',
+                                                    'July' => 'Temmuz', 'August' => 'Ağustos', 'September' => 'Eylül',
+                                                    'October' => 'Ekim', 'November' => 'Kasım', 'December' => 'Aralık'
+                                                ];
+                                                $monthName = str_replace(array_keys($turkishMonths), array_values($turkishMonths), $monthName);
+                                                echo '<option value="' . $month . '"' . ($selected_month === $month ? ' selected' : '') . '>' . $monthName . '</option>';
+                                            }
+                                            
+                                            // Son 3 yılı da ekle
+                                            for ($i = 0; $i < 3; $i++) {
+                                                $year = date('Y') - $i;
+                                                echo '<option value="' . $year . '"' . ($selected_month === $year ? ' selected' : '') . '>' . $year . ' Yılı</option>';
+                                            }
+                                            ?>
+                                        </select>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Aylık Kazanç Kartları -->
                 <div class="row">
-                    <div class="col-12 mb-3">
-                        <form method="GET" class="d-flex align-items-center">
-                            <label for="month" class="me-2">Ay Seçin:</label>
-                            <select name="month" id="month" class="form-select" style="width: auto;" onchange="this.form.submit()">
-                                <?php
-                                // Yıl seçenekleri
-                                echo "<optgroup label='Yıllar'>";
-                                $current_year = date('Y');
-                                for ($i = 0; $i < 3; $i++) {
-                                    $year = $current_year - $i;
-                                    $selected = ($selected_month === (string)$year) ? 'selected' : '';
-                                    echo "<option value='$year' $selected>$year Yılı</option>";
-                                }
-                                echo "</optgroup>";
-                                
-                                echo "<optgroup label='Aylar'>";
-                                // Son 12 ayı listele
-                                $aylar = [
-                                    'January' => 'Ocak',
-                                    'February' => 'Şubat',
-                                    'March' => 'Mart',
-                                    'April' => 'Nisan',
-                                    'May' => 'Mayıs',
-                                    'June' => 'Haziran',
-                                    'July' => 'Temmuz',
-                                    'August' => 'Ağustos',
-                                    'September' => 'Eylül',
-                                    'October' => 'Ekim',
-                                    'November' => 'Kasım',
-                                    'December' => 'Aralık'
-                                ];
-                                
-                                for ($i = 0; $i < 12; $i++) {
-                                    $month = date('Y-m', strtotime("-$i months"));
-                                    $month_name = date('F Y', strtotime($month));
-                                    $selected = ($month === $selected_month) ? 'selected' : '';
-                                    $ay = $aylar[date('F', strtotime($month))];
-                                    echo "<option value='$month' $selected>" . $ay . " " . date('Y', strtotime($month)) . "</option>";
-                                }
-                                echo "</optgroup>";
-                                ?>
-                            </select>
-                        </form>
-                    </div>
                     <div class="col-md-4">
                         <div class="stats-card d-flex align-items-center">
                             <div class="stats-info flex-grow-1">
                                 <div class="number"><?php echo number_format($monthly_income, 2, ',', '.'); ?> ₺</div>
-                                <div class="label">Bu Ayki Toplam Kazanç</div>
+                                <div class="label">
+                                    <?php 
+                                    if (strlen($selected_month) === 4) {
+                                        echo $selected_month . ' Yılı Toplam Kazanç';
+                                    } else {
+                                        $displayMonth = date('F Y', strtotime($selected_month));
+                                        $turkishMonths = [
+                                            'January' => 'Ocak', 'February' => 'Şubat', 'March' => 'Mart',
+                                            'April' => 'Nisan', 'May' => 'Mayıs', 'June' => 'Haziran',
+                                            'July' => 'Temmuz', 'August' => 'Ağustos', 'September' => 'Eylül',
+                                            'October' => 'Ekim', 'November' => 'Kasım', 'December' => 'Aralık'
+                                        ];
+                                        $displayMonth = str_replace(array_keys($turkishMonths), array_values($turkishMonths), $displayMonth);
+                                        echo $displayMonth . ' Toplam Kazanç';
+                                    }
+                                    ?>
+                                </div>
                             </div>
                             <div class="icon text-success ms-3">
                                 <i class="bi bi-cash-stack"></i>
@@ -249,7 +251,23 @@ include 'includes/header.php';
                         <div class="stats-card d-flex align-items-center">
                             <div class="stats-info flex-grow-1">
                                 <div class="number"><?php echo number_format($cash_income, 2, ',', '.'); ?> ₺</div>
-                                <div class="label">Bu Ayki Nakit + Havale/EFT</div>
+                                <div class="label">
+                                    <?php 
+                                    if (strlen($selected_month) === 4) {
+                                        echo $selected_month . ' Yılı Nakit + Havale/EFT';
+                                    } else {
+                                        $displayMonth = date('F Y', strtotime($selected_month));
+                                        $turkishMonths = [
+                                            'January' => 'Ocak', 'February' => 'Şubat', 'March' => 'Mart',
+                                            'April' => 'Nisan', 'May' => 'Mayıs', 'June' => 'Haziran',
+                                            'July' => 'Temmuz', 'August' => 'Ağustos', 'September' => 'Eylül',
+                                            'October' => 'Ekim', 'November' => 'Kasım', 'December' => 'Aralık'
+                                        ];
+                                        $displayMonth = str_replace(array_keys($turkishMonths), array_values($turkishMonths), $displayMonth);
+                                        echo $displayMonth . ' Nakit + Havale/EFT';
+                                    }
+                                    ?>
+                                </div>
                             </div>
                             <div class="icon text-primary ms-3">
                                 <i class="bi bi-cash"></i>
@@ -260,7 +278,23 @@ include 'includes/header.php';
                         <div class="stats-card d-flex align-items-center">
                             <div class="stats-info flex-grow-1">
                                 <div class="number"><?php echo number_format($card_income, 2, ',', '.'); ?> ₺</div>
-                                <div class="label">Bu Ayki Kredi Kartı Kazancı</div>
+                                <div class="label">
+                                    <?php 
+                                    if (strlen($selected_month) === 4) {
+                                        echo $selected_month . ' Yılı Kredi Kartı Kazancı';
+                                    } else {
+                                        $displayMonth = date('F Y', strtotime($selected_month));
+                                        $turkishMonths = [
+                                            'January' => 'Ocak', 'February' => 'Şubat', 'March' => 'Mart',
+                                            'April' => 'Nisan', 'May' => 'Mayıs', 'June' => 'Haziran',
+                                            'July' => 'Temmuz', 'August' => 'Ağustos', 'September' => 'Eylül',
+                                            'October' => 'Ekim', 'November' => 'Kasım', 'December' => 'Aralık'
+                                        ];
+                                        $displayMonth = str_replace(array_keys($turkishMonths), array_values($turkishMonths), $displayMonth);
+                                        echo $displayMonth . ' Kredi Kartı Kazancı';
+                                    }
+                                    ?>
+                                </div>
                             </div>
                             <div class="icon text-info ms-3">
                                 <i class="bi bi-credit-card"></i>
@@ -272,7 +306,23 @@ include 'includes/header.php';
                 <!-- Geçmiş Randevular ve Ödemeler -->
                 <div class="card">
                     <div class="card-header">
-                        <h5 class="mb-0">Geçmiş Randevular ve Ödemeler</h5>
+                        <h5 class="mb-0">
+                            <?php 
+                            if (strlen($selected_month) === 4) {
+                                echo $selected_month . ' Yılı Randevular ve Ödemeler';
+                            } else {
+                                $displayMonth = date('F Y', strtotime($selected_month));
+                                $turkishMonths = [
+                                    'January' => 'Ocak', 'February' => 'Şubat', 'March' => 'Mart',
+                                    'April' => 'Nisan', 'May' => 'Mayıs', 'June' => 'Haziran',
+                                    'July' => 'Temmuz', 'August' => 'Ağustos', 'September' => 'Eylül',
+                                    'October' => 'Ekim', 'November' => 'Kasım', 'December' => 'Aralık'
+                                ];
+                                $displayMonth = str_replace(array_keys($turkishMonths), array_values($turkishMonths), $displayMonth);
+                                echo $displayMonth . ' Randevular ve Ödemeler';
+                            }
+                            ?>
+                        </h5>
                     </div>
                     <div class="card-body">
                         <div class="table-responsive">
@@ -328,9 +378,14 @@ include 'includes/header.php';
                                                     <i class="bi bi-cash me-1"></i> Ödeme Al
                                                 </button>
                                             <?php else: ?>
-                                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editPaymentModal<?php echo $payment['payment_id']; ?>">
-                                                    <i class="bi bi-pencil"></i>
-                                                </button>
+                                                <div class="btn-group" role="group">
+                                                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editPaymentModal<?php echo $payment['payment_id']; ?>">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </button>
+                                                    <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#cancelPaymentModal<?php echo $payment['payment_id']; ?>">
+                                                        <i class="bi bi-x-circle"></i>
+                                                    </button>
+                                                </div>
                                             <?php endif; ?>
                                         </td>
                                     </tr>
@@ -471,8 +526,44 @@ include 'includes/header.php';
     <?php endif; ?>
     <?php endforeach; ?>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/js/script.js"></script>
-    <script src="assets/js/toast.js"></script>
-</body>
-</html> 
+    <!-- Ödeme İptal Modali -->
+    <?php foreach ($payments as $payment): ?>
+    <?php if ($payment['payment_id']): ?>
+    <div class="modal fade" id="cancelPaymentModal<?php echo $payment['payment_id']; ?>" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Ödeme İptal Et</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-triangle me-2"></i>
+                        <strong>Dikkat!</strong> Bu işlem geri alınamaz.
+                    </div>
+                    <p>
+                        <strong><?php echo htmlspecialchars($payment['client_name']); ?></strong> isimli danışanın 
+                        <strong><?php echo date('d.m.Y H:i', strtotime($payment['appointment_date'] . ' ' . $payment['appointment_time'])); ?></strong> 
+                        tarihli randevusu için alınan <strong><?php echo number_format($payment['amount'], 2, ',', '.'); ?> ₺</strong> 
+                        ödemeyi iptal etmek istediğinizden emin misiniz?
+                    </p>
+                    <p class="text-muted">
+                        Ödeme iptal edildiğinde, randevu "ödenmedi" durumuna geçecektir.
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <form action="process/cancel-payment" method="POST" style="display: inline;">
+                        <input type="hidden" name="payment_id" value="<?php echo $payment['payment_id']; ?>">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="bi bi-x-circle me-1"></i> Ödeme İptal Et
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
+    <?php endforeach; ?>
+
+<?php include 'includes/footer.php'; ?> 

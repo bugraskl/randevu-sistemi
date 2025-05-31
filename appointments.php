@@ -191,33 +191,6 @@ include 'includes/header.php';
             </nav>
 
             <div class="container-fluid p-4">
-                <?php if (isset($_SESSION['success'])): ?>
-                <script>
-                    window.sessionSuccess = '<?php echo addslashes($_SESSION['success']); ?>';
-                    document.addEventListener('DOMContentLoaded', function() {
-                        window.showToastMessage(window.sessionSuccess, 'success');
-                    });
-                </script>
-                <?php unset($_SESSION['success']); endif; ?>
-
-                <?php if (isset($_SESSION['error'])): ?>
-                <script>
-                    window.sessionError = '<?php echo addslashes($_SESSION['error']); ?>';
-                    document.addEventListener('DOMContentLoaded', function() {
-                        window.showToastMessage(window.sessionError, 'error');
-                    });
-                </script>
-                <?php unset($_SESSION['error']); endif; ?>
-
-                <?php if (isset($_SESSION['warning'])): ?>
-                <script>
-                    window.sessionWarning = '<?php echo addslashes($_SESSION['warning']); ?>';
-                    document.addEventListener('DOMContentLoaded', function() {
-                        window.showToastMessage(window.sessionWarning, 'warning');
-                    });
-                </script>
-                <?php unset($_SESSION['warning']); endif; ?>
-
                 <div class="card">
                     <div class="card-header">
                         <div class="d-flex justify-content-between align-items-center">
@@ -282,6 +255,16 @@ include 'includes/header.php';
                                             </tr>
                                         </thead>
                                         <tbody>
+                                            <?php if (empty($appointments)): ?>
+                                            <tr>
+                                                <td colspan="7" class="text-center py-4">
+                                                    <div class="d-flex flex-column align-items-center">
+                                                        <i class="bi bi-calendar-x fs-1 text-muted mb-2"></i>
+                                                        <p class="text-muted mb-0">Henüz randevu bulunmuyor.</p>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            <?php else: ?>
                                             <?php foreach ($appointments as $appointment): 
                                                 $appointmentDate = new DateTime($appointment['appointment_date']);
                                                 $dayName = $gunler[$appointmentDate->format('l')];
@@ -311,6 +294,7 @@ include 'includes/header.php';
                                                 </td>
                                             </tr>
                                             <?php endforeach; ?>
+                                            <?php endif; ?>
                                         </tbody>
                                     </table>
                                 </div>
@@ -539,15 +523,6 @@ include 'includes/header.php';
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/js/toast.js"></script>
-    <!-- jQuery -->
-    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-    <!-- Select2 CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-    <link href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" rel="stylesheet" />
-    <!-- Select2 JS -->
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
     // Randevuları global değişkene aktar
     window.appointments = <?php echo json_encode($calendar_appointments); ?>;
@@ -606,6 +581,5 @@ include 'includes/header.php';
         });
     });
     </script>
-    <script src="assets/js/script.js"></script>
-</body>
-</html> 
+
+<?php include 'includes/footer.php'; ?> 

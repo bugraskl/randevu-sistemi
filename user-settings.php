@@ -218,35 +218,4 @@ include 'includes/header.php';
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="assets/js/script.js"></script>
-    <script src="assets/js/toast.js"></script>
-
-    <?php if (isset($_SESSION['success'])): ?>
-    <script>
-        window.sessionSuccess = '<?php echo addslashes($_SESSION['success']); ?>';
-        document.addEventListener('DOMContentLoaded', function() {
-            window.showToastMessage(window.sessionSuccess, 'success');
-        });
-    </script>
-    <?php unset($_SESSION['success']); endif; ?>
-
-    <?php if (isset($_SESSION['error'])): ?>
-    <script>
-        window.sessionError = '<?php echo addslashes($_SESSION['error']); ?>';
-        document.addEventListener('DOMContentLoaded', function() {
-            window.showToastMessage(window.sessionError, 'error');
-        });
-    </script>
-    <?php unset($_SESSION['error']); endif; ?>
-
-    <?php if (isset($_SESSION['warning'])): ?>
-    <script>
-        window.sessionWarning = '<?php echo addslashes($_SESSION['warning']); ?>';
-        document.addEventListener('DOMContentLoaded', function() {
-            window.showToastMessage(window.sessionWarning, 'warning');
-        });
-    </script>
-    <?php unset($_SESSION['warning']); endif; ?>
-</body>
-</html> 
+<?php include 'includes/footer.php'; ?> 
