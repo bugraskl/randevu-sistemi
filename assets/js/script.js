@@ -111,6 +111,9 @@ document.addEventListener('DOMContentLoaded', function() {
         case 'appointments':
             window.initializeAppointmentsPage();
             break;
+        case 'expenses':
+            window.initializeExpensesPage && window.initializeExpensesPage();
+            break;
         // Diğer sayfalar için case'ler eklenebilir
     }
 });
@@ -120,6 +123,11 @@ window.showToastMessage = function(message, type) {
     if (window.toast && typeof window.toast.show === 'function') {
         window.toast.show(message, type);
     }
+};
+
+// Expenses sayfası init (ileride filtre/arama eklemek için placeholder)
+window.initializeExpensesPage = function() {
+    // Gelecekte gelişmiş filtre/arama için burada JS yazılabilir
 };
 
 // Global mesaj fonksiyonları (PHP session mesajları için)

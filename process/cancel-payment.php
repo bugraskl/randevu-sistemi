@@ -58,4 +58,3 @@ if (isset($_POST['redirect']) && $_POST['redirect'] === 'client-details') {
     header('Location: ../payments');
 }
 exit();
-?> 

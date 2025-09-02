@@ -121,3 +121,34 @@ INSERT INTO `users` (`id`, `name`, `email`, `password`, `role`, `status`, `remem
 /*!40014 SET FOREIGN_KEY_CHECKS=IFNULL(@OLD_FOREIGN_KEY_CHECKS, 1) */;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40111 SET SQL_NOTES=IFNULL(@OLD_SQL_NOTES, 1) */;
+ 
+-- tablo yapısı dökülüyor randevu_db.expenses
+CREATE TABLE IF NOT EXISTS `expenses` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `title` varchar(150) NOT NULL,
+  `category` varchar(100) DEFAULT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `payment_method` enum('cash','card','bank_transfer','other') DEFAULT 'cash',
+  `expense_date` date NOT NULL,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- tablo yapısı dökülüyor randevu_db.recurring_expenses
+CREATE TABLE IF NOT EXISTS `recurring_expenses` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `title` varchar(150) NOT NULL,
+  `category` varchar(100) DEFAULT NULL,
+  `amount` decimal(10,2) NOT NULL,
+  `payment_method` enum('cash','card','bank_transfer','other') DEFAULT 'cash',
+  `start_date` date NOT NULL,
+  `end_date` date DEFAULT NULL,
+  `recurrence_interval` enum('weekly','monthly','quarterly','yearly') NOT NULL,
+  `active` tinyint(1) NOT NULL DEFAULT 1,
+  `notes` text DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
