@@ -82,6 +82,24 @@ try {
         try {
             debugLog("Randevu işleniyor - ID: {$appointment['id']}, Danışan: {$appointment['client_name']}, Telefon: {$appointment['phone']}");
             
+            // Benzersiz teyit token'ı oluştur (12 karakter - SMS için kısa)
+            $token = bin2hex(random_bytes(6));
+            $tokenExpires = date('Y-m-d H:i:s', strtotime('+2 days')); // 2 gün geçerli
+            
+            // Token'ı veritabanına kaydet
+            $updateStmt = $db->prepare("
+                UPDATE appointments 
+                SET confirmation_token = ?, token_expires_at = ?
+                WHERE id = ?
+            ");
+            $updateStmt->execute([$token, $tokenExpires, $appointment['id']]);
+            
+            debugLog("Token oluşturuldu: " . substr($token, 0, 10) . "...");
+            
+            // Teyit linkini oluştur (kısa format)
+            $appUrl = EnvConfig::get('APP_URL', 'https://randevu.iklimakcaglayan.com');
+            $confirmLink = rtrim($appUrl, '/') . '/ca?t=' . $token;
+            
             // SMS şablonunu veritabanından al
             $template = getSMSTemplate('randevu_hatirlatma');
             
@@ -90,12 +108,16 @@ try {
                 $message = "Sayin {$appointment['client_name']}, yarin " . 
                           date('d.m.Y', strtotime($appointment['appointment_date'])) . " tarihinde " . 
                           date('H:i', strtotime($appointment['appointment_time'])) . 
-                          " saatinde randevunuz bulunmaktadir.";
+                          " saatinde randevunuz bulunmaktadir. Teyit/iptal: " . $confirmLink;
             } else {
                 // Şablonu kullan
                 $message = str_replace(
-                    ['{danisan_adi}', '{saat}'],
-                    [$appointment['client_name'], date('H:i', strtotime($appointment['appointment_time']))],
+                    ['{danisan_adi}', '{saat}', '{teyit_linki}'],
+                    [
+                        $appointment['client_name'], 
+                        date('H:i', strtotime($appointment['appointment_time'])),
+                        $confirmLink
+                    ],
                     $template
                 );
             }
