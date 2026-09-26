@@ -4,14 +4,30 @@ PHP tabanlı profesyonel randevu yönetim sistemi. Psikolog, doktor ve benzeri m
 
 ## Özellikler
 
-- 📅 **Randevu Yönetimi**: Kolay randevu oluşturma, düzenleme ve takip
-- 📱 **SMS Entegrasyonu**: NetGSM üzerinden otomatik SMS bildirimleri
-- 👥 **Danışan Yönetimi**: Kapsamlı müşteri profili ve geçmiş takibi
-- 💰 **Ödeme Takibi**: Gelir ve gider yönetimi
+- 📅 **Randevu Yönetimi**: Kolay randevu oluşturma, düzenleme ve takip; telefonda da çalışan aylık takvim
+- ☀️ **Bugün Ekranı**: Sıradaki seans, canlı seans halkası, saat ekseninde günün programı ve ödeme bekleyen seanslar
+- 📱 **SMS Entegrasyonu**: NetGSM üzerinden randevu oluşturma ve hatırlatma SMS'leri
+- 👥 **Danışan Yönetimi**: Kapsamlı müşteri profili ve geçmiş takibi; randevu ekranından yeni danışan ekleme
+- ☎️ **Tek Telefon Biçimi**: `+90 (537) 221 23 23`, `05372212323`, `5372212323` gibi tüm girişler `05372212323` olarak kaydedilir
+- 💰 **Ödeme Takibi**: Gelir ve gider yönetimi, tek dokunuşla ödeme alma
+- ⚙️ **Seans Ayarları**: Varsayılan seans ücreti ve süresi yönetim panelinden
 - 📊 **Raporlama**: Detaylı istatistik ve analiz raporları
 - 🌙 **Tema Desteği**: Açık/koyu mod seçenekleri
-- 📱 **Responsive Tasarım**: Mobil uyumlu arayüz
-- 🔒 **Güvenlik**: Session tabanlı kullanıcı yönetimi
+- 📱 **Telefon Öncelikli Tasarım**: Alt sekme çubuğu, alttan açılan paneller, PWA desteği
+- 🔒 **Güvenlik**: Session tabanlı kullanıcı yönetimi, hassas dosyalara web erişimi kapalı
+
+## 2.0 ile gelenler
+
+- Arayüz telefon öncelikli olarak baştan tasarlandı; tasarım sistemi `DESIGN.md` dosyasında belgelidir.
+- Randevular onay beklemez: oluşturulan randevu planlanmış sayılır. Danışana yalnızca randevunun oluşturulduğu SMS'i ve bir gün önce hatırlatma SMS'i gider (teyit linki üretilmez).
+- Varsayılan seans ücreti ve süresi **Menü → Seans Ayarları** sayfasından yönetilir (`app_settings` tablosu).
+- Gider işlemlerine giriş kontrolü eklendi; kullanıcı araması artık şifre özetlerini tarayıcıya göndermez; `.htaccess` `env`, `.sql`, `.log`, `.zip` dosyalarına ve `logs/`, `database/` klasörlerine web erişimini kapatır.
+
+### 1.x sürümünden güncelleme
+
+1. Dosyaları güncelleyin (`env` dosyanıza dokunmayın).
+2. `app_settings` tablosu ilk açılışta otomatik oluşturulur. Veritabanı kullanıcınızın tablo oluşturma yetkisi yoksa `database/migrations/2026-09-26_app_settings.sql` dosyasını bir kez çalıştırın.
+3. Kayıtlı telefon numaraları zaten `05XXXXXXXXX` biçimindeyse ek işlem gerekmez.
 
 ## Kurulum
 
@@ -115,6 +131,9 @@ Sistem varsayılan admin kullanıcısı ile gelir:
 | `SMS_ENABLED` | SMS gönderimini aktif/pasif yapar | true |
 | `SMS_DEBUG` | SMS debug modu | false |
 | `SMS_SECURITY_TOKEN` | SMS endpoint güvenlik token'ı | - |
+| `SEANS_SURESI_DK` | Seans süresi için ilk varsayılan (sonra Seans Ayarları'ndan) | 50 |
+| `PRACTITIONER_NAME` | Teyit sayfasında görünen uzman adı (isteğe bağlı) | - |
+| `N8N_WEBHOOK_URL` / `N8N_WEBHOOK_TOKEN` / `N8N_WEBHOOK_USER` | Ödeme alındığında gelir bildirimi gönderilecek webhook (isteğe bağlı) | - |
 
 ### Production Ayarları
 
@@ -130,9 +149,9 @@ SMS_DEBUG=false
 
 Sistem NetGSM SMS servisi ile entegre çalışır. SMS özellikleri:
 
-- Randevu oluşturulduğunda otomatik SMS
-- Randevu hatırlatma SMS'leri
-- Özelleştirilebilir SMS şablonları
+- Randevu oluşturulduğunda otomatik SMS (tarih/saat değiştirilirse güncel bilgiyle tekrar)
+- Randevudan bir gün önce hatırlatma SMS'i (onay/teyit linki içermez)
+- Özelleştirilebilir SMS şablonları (`{danisan_adi}`, `{tarih}`, `{saat}`)
 
 ### Otomatik SMS Hatırlatma
 
@@ -142,6 +161,20 @@ Cron job ekleyerek günlük otomatik hatırlatma SMS'leri gönderebilirsiniz:
 # Her gün saat 10:00'da çalışacak şekilde
 0 10 * * * curl "https://yourdomain.com/process/send-reminder-sms.php?token=YOUR_SMS_SECURITY_TOKEN"
 ```
+
+## Yerel Geliştirme
+
+`dev/` klasörü, gerçek `env` dosyanıza ve verilerinize dokunmadan çalışan bir geliştirme ortamı sağlar:
+
+```bash
+# Sentetik verili ayrı bir veritabanı (randevu_dev) kurar; giriş bilgileri dev/seed.php içindedir
+php dev/seed.php
+
+# PHP yerleşik sunucusu: bu sunucuda config/env.php otomatik olarak dev/env.dev dosyasını kullanır (SMS kapalı)
+php -S localhost:8091 -t . dev/router.php
+```
+
+`dev/.htaccess` bu klasörü web'den erişilemez yapar; production'da `dev/env.dev` hiçbir zaman okunmaz.
 
 ## Kullanım
 

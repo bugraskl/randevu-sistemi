@@ -67,82 +67,106 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_template'])) {
     }
 }
 
+// --- Görünüm için yardımcılar (işleme mantığına dokunmaz) ---
+$smsEnabled = EnvConfig::getBool('SMS_ENABLED', true);
+
+// Şablon adı → başlık ve ne zaman gönderildiği
+$templateInfo = [
+    'randevu_olusturma' => [
+        'title' => 'Randevu oluşturma',
+        'note' => 'Yeni randevu eklendiğinde ya da randevunun tarihi veya saati değiştiğinde danışana gider.',
+    ],
+    'randevu_hatirlatma' => [
+        'title' => 'Randevu hatırlatma',
+        'note' => 'Randevudan bir gün önce danışana gider. Kullanılabilen değişkenler: <code class="sms-var">{danisan_adi}</code>, <code class="sms-var">{tarih}</code>, <code class="sms-var">{saat}</code>.',
+    ],
+    'randevu_iptal_bildirim' => [
+        'title' => 'İptal bildirimi',
+        'note' => 'Danışan SMS’teki bağlantıdan randevusunu iptal ettiğinde size gelir.',
+    ],
+];
+
+$pageTitle = 'SMS Ayarları';
+$pageSubtitle = 'Danışanlara giden mesaj şablonları';
+
 // Header'ı dahil et
 include 'includes/header.php';
 ?>
-
-<body class="<?php echo $themeClass; ?>">
+<body class="<?php echo $themeClass; ?>" data-page="sms-settings">
     <div class="wrapper">
         <?php include 'includes/sidebar.php'; ?>
 
-        <!-- Page Content -->
-        <div id="content">
-            <nav class="navbar navbar-expand-lg navbar-light bg-light">
-                <div class="container-fluid">
-                    <button type="button" id="sidebarCollapse" class="btn btn-secondary">
-                        <i class="bi bi-list"></i>
-                    </button>
-                    <div class="ms-auto">
-                        <button type="button" id="themeToggle" class="btn btn-outline-secondary me-2">
-                            <i class="bi bi-moon-fill"></i>
-                        </button>
-                        <a href="auth/logout" class="btn btn-outline-danger">
-                            <i class="bi bi-box-arrow-right"></i> Çıkış Yap
-                        </a>
-                    </div>
+        <main id="content" tabindex="-1">
+            <?php include 'includes/topbar.php'; ?>
+
+            <div class="page page-narrow">
+                <?php if (!$smsEnabled): ?>
+                <div class="alert alert-info mb-0" role="status">
+                    SMS gönderimi şu an kapalı. Şablonlarda yaptığınız değişiklikler kaydedilir, ancak gönderim açılana kadar danışanlara mesaj gitmez.
                 </div>
-            </nav>
+                <?php endif; ?>
 
-            <div class="container-fluid p-4">
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h5 class="mb-0">SMS Şablonları</h5>
+                <!-- Kullanılabilir değişkenler -->
+                <section class="section" aria-labelledby="smsVarsTitle">
+                    <div class="section-head">
+                        <h2 class="section-title" id="smsVarsTitle">Değişkenler</h2>
+                    </div>
+                    <div class="panel panel-pad">
+                        <p class="sms-vars-intro">Metne yazdığınız bu alanlar, SMS gönderilirken randevunun bilgisiyle değişir.</p>
+                        <dl class="sms-vars">
+                            <div>
+                                <dt><code class="sms-var">{danisan_adi}</code></dt>
+                                <dd>Danışanın adı</dd>
                             </div>
-                            <div class="card-body">
-                                <div class="alert alert-info">
-                                    <h6 class="alert-heading">Kullanılabilir Değişkenler:</h6>
-                                    <ul class="mb-0">
-                                        <li><code>{danisan_adi}</code> - Danışanın adı</li>
-                                        <li><code>{tarih}</code> - Randevu tarihi</li>
-                                        <li><code>{saat}</code> - Randevu saati</li>
-                                    </ul>
-                                </div>
+                            <div>
+                                <dt><code class="sms-var">{tarih}</code></dt>
+                                <dd>Randevu tarihi</dd>
+                            </div>
+                            <div>
+                                <dt><code class="sms-var">{saat}</code></dt>
+                                <dd>Randevu saati</dd>
+                            </div>
+                        </dl>
+                    </div>
+                </section>
 
-                                <?php foreach ($templates as $template): ?>
-                                <div class="mb-4">
-                                    <h6 class="mb-3">
-                                        <?php 
-                                        switch($template['template_name']) {
-                                            case 'randevu_olusturma':
-                                                echo 'Randevu Oluşturma SMS Şablonu';
-                                                break;
-                                            case 'randevu_hatirlatma':
-                                                echo 'Randevu Hatırlatma SMS Şablonu';
-                                                break;
-                                            default:
-                                                echo ucfirst(str_replace('_', ' ', $template['template_name']));
-                                        }
-                                        ?>
-                                    </h6>
-                                    <form method="POST" class="sms-template-form">
-                                        <input type="hidden" name="template_id" value="<?php echo $template['id']; ?>">
-                                        <div class="mb-3">
-                                            <textarea class="form-control" name="template_text" rows="3" required><?php echo htmlspecialchars($template['template_text']); ?></textarea>
-                                        </div>
-                                        <button type="submit" name="update_template" class="btn btn-primary">
-                                            <i class="bi bi-save"></i> Kaydet
-                                        </button>
-                                    </form>
-                                </div>
-                                <?php endforeach; ?>
-                            </div>
+                <?php if (empty($templates)): ?>
+                <section class="section">
+                    <div class="empty">
+                        <p class="empty-title">SMS şablonu bulunamadı</p>
+                        <p>Şablon kaydı olmadığında mesajlar sistemin varsayılan metniyle gönderilir.</p>
+                    </div>
+                </section>
+                <?php endif; ?>
+
+                <?php foreach ($templates as $template):
+                    $tplId = (int) $template['id'];
+                    $info = $templateInfo[$template['template_name']] ?? null;
+                    $tplTitle = $info['title'] ?? ucfirst(str_replace('_', ' ', $template['template_name']));
+                ?>
+                <section class="section" aria-labelledby="tplTitle<?php echo $tplId; ?>">
+                    <div class="section-head">
+                        <h2 class="section-title" id="tplTitle<?php echo $tplId; ?>"><?php echo htmlspecialchars($tplTitle); ?></h2>
+                    </div>
+                    <form method="POST" class="sms-template-form panel panel-pad">
+                        <input type="hidden" name="template_id" value="<?php echo $tplId; ?>">
+                        <?php if ($info): ?>
+                        <p class="sms-note" id="tplNote<?php echo $tplId; ?>"><?php echo $info['note']; ?></p>
+                        <?php endif; ?>
+                        <div class="field">
+                            <label for="tplText<?php echo $tplId; ?>" class="form-label">Mesaj metni</label>
+                            <textarea class="form-control" id="tplText<?php echo $tplId; ?>" name="template_text" rows="4" required<?php echo $info ? ' aria-describedby="tplNote' . $tplId . '"' : ''; ?>><?php echo htmlspecialchars($template['template_text']); ?></textarea>
                         </div>
-                    </div>
-                </div>
+                        <div class="d-grid d-sm-flex justify-content-sm-end">
+                            <button type="submit" name="update_template" class="btn btn-primary">
+                                Şablonu kaydet
+                            </button>
+                        </div>
+                    </form>
+                </section>
+                <?php endforeach; ?>
             </div>
-        </div>
+        </main>
     </div>
 
-<?php include 'includes/footer.php'; ?> 
+<?php include 'includes/footer.php'; ?>

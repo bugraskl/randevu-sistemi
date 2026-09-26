@@ -49,7 +49,7 @@ if (empty($token)) {
                     $stmt->execute([$appointment['id']]);
                     
                     // Yöneticiye SMS gönder
-                    $adminPhone = EnvConfig::get('ADMIN_NOTIFICATION_PHONE', '05350210164');
+                    $adminPhone = EnvConfig::get('ADMIN_NOTIFICATION_PHONE', '');
                     $template = getSMSTemplate('randevu_iptal_bildirim');
                     
                     if ($template) {
@@ -97,191 +97,174 @@ $gunler = [
     'Saturday' => 'Cumartesi',
     'Sunday' => 'Pazar'
 ];
+
+// --- Görünüm için yardımcılar (işleme mantığına dokunmaz) ---
+$aylar = [1 => 'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+$aptTime = '';
+$aptDateText = '';
+$aptDatetime = '';
+if ($appointment) {
+    $date = new DateTime($appointment['appointment_date']);
+    $aptTime = date('H:i', strtotime($appointment['appointment_time']));
+    $aptDateText = $date->format('j') . ' ' . $aylar[(int) $date->format('n')] . ' ' . $date->format('Y') . ', ' . $gunler[$date->format('l')];
+    $aptDatetime = $date->format('Y-m-d') . 'T' . $aptTime;
+}
+$wasCancelled = $processed && $action === 'cancel';
+$styleVersion = @filemtime(__DIR__ . '/assets/css/style.css') ?: '1';
 ?>
 <!DOCTYPE html>
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Randevu Teyit</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="robots" content="noindex, nofollow">
+    <title>Randevu teyidi</title>
+    <link rel="icon" type="image/svg+xml" href="assets/icons/favicon.svg">
+    <link rel="preload" href="assets/fonts/figtree-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="assets/css/style.css?v=<?php echo htmlspecialchars((string) $styleVersion); ?>">
+    <script>
+        // Tarayıcı çubuğu üstteki ana renk bölgeyle birleşsin (renk tokendan okunur)
+        (function () {
+            var c = getComputedStyle(document.documentElement).getPropertyValue('--wool').trim();
+            if (c) {
+                var m = document.createElement('meta');
+                m.name = 'theme-color';
+                m.content = c;
+                document.head.appendChild(m);
+            }
+        })();
+    </script>
     <style>
-        * {
+        /* Randevu teyidi — yalnızca tokenlar; uygulama iskeleti yok, yalnız açık tema */
+        .confirm {
+            width: 100%;
+            max-width: 480px;
+            margin: 0 auto;
+        }
+
+        .confirm-hero {
+            padding: calc(var(--s-7) + env(safe-area-inset-top, 0px)) var(--s-5) var(--s-6);
+            border-radius: 0 0 var(--r-lg) var(--r-lg);
+        }
+
+        .confirm-title {
             margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+            font-size: 1.125rem;
+            font-weight: 650;
+            letter-spacing: -0.01em;
         }
-        
-        body {
-            min-height: 100vh;
-            background: #f5f5f5;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
+
+        .confirm-who {
+            margin: 2px 0 0;
+            font-size: 0.9375rem;
         }
-        
-        .container {
-            background: #fff;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            max-width: 400px;
-            width: 100%;
-            padding: 30px;
+
+        .confirm-when {
+            margin-top: var(--s-5);
+            padding-top: var(--s-5);
+            border-top: 1px solid var(--wool-line);
         }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 25px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid #eee;
+
+        .confirm-hero.is-cancelled .now-time {
+            color: var(--on-wool-2);
+            text-decoration: line-through;
+            text-decoration-thickness: 3px;
         }
-        
-        .header h1 {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 5px;
+
+        .confirm-body {
+            padding: var(--s-5) var(--gutter) calc(var(--s-7) + env(safe-area-inset-bottom, 0px));
         }
-        
-        .header p {
-            color: #666;
-            font-size: 0.9rem;
+
+        .confirm-lead {
+            margin: 0 0 var(--s-1);
+            font-size: 1.0625rem;
+            font-weight: 650;
+            color: var(--ink);
         }
-        
-        .greeting {
-            text-align: center;
-            margin-bottom: 20px;
-            color: #333;
+
+        .confirm-state {
+            margin: 0 0 var(--s-3);
         }
-        
-        .info-box {
-            background: #fafafa;
-            border: 1px solid #eee;
-            border-radius: 6px;
-            padding: 15px;
-            margin-bottom: 25px;
+
+        .confirm-actions {
+            display: grid;
+            gap: var(--s-3);
+            margin-top: var(--s-5);
         }
-        
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
+
+        .confirm-foot {
+            margin: var(--s-4) 0 0;
+            font-size: 0.875rem;
+            color: var(--ink-3);
         }
-        
-        .info-row:not(:last-child) {
-            border-bottom: 1px solid #eee;
-        }
-        
-        .info-row .label {
-            color: #666;
-        }
-        
-        .info-row .value {
-            font-weight: 500;
-            color: #333;
-        }
-        
-        .btn {
-            width: 100%;
-            padding: 14px;
-            border: none;
-            border-radius: 6px;
-            font-size: 1rem;
-            font-weight: 500;
-            cursor: pointer;
-            margin-bottom: 10px;
-        }
-        
-        .btn-confirm {
-            background: #333;
-            color: #fff;
-        }
-        
-        .btn-confirm:hover {
-            background: #444;
-        }
-        
-        .btn-cancel {
-            background: #fff;
-            color: #666;
-            border: 1px solid #ddd;
-        }
-        
-        .btn-cancel:hover {
-            background: #f5f5f5;
-        }
-        
-        .message {
-            text-align: center;
-            padding: 20px 0;
-        }
-        
-        .message.error {
-            color: #c00;
-        }
-        
-        .message.success {
-            color: #333;
-        }
-        
-        .footer-text {
-            text-align: center;
-            color: #999;
-            font-size: 0.8rem;
-            margin-top: 15px;
+
+        @media (min-width: 560px) {
+            .confirm {
+                padding: var(--s-8) var(--gutter);
+            }
+
+            .confirm-hero {
+                padding: var(--s-7) var(--s-6);
+                border-radius: var(--r-lg);
+            }
+
+            .confirm-body {
+                padding: var(--s-4) 0 0;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>Randevu Teyit</h1>
-            <p>Psk. İklim Akçağlayan</p>
+    <main class="confirm">
+        <header class="confirm-hero wool<?php echo $wasCancelled ? ' is-cancelled' : ''; ?>">
+            <h1 class="confirm-title">Randevu teyidi</h1>
+            <?php $practitionerName = EnvConfig::get('PRACTITIONER_NAME', ''); ?>
+            <?php if ($practitionerName !== ''): ?>
+            <p class="confirm-who"><?php echo htmlspecialchars($practitionerName); ?></p>
+            <?php endif; ?>
+            <?php if ($appointment): ?>
+            <div class="confirm-when">
+                <time class="now-time" datetime="<?php echo htmlspecialchars($aptDatetime); ?>"><?php echo htmlspecialchars($aptTime); ?></time>
+                <span class="now-name"><?php echo htmlspecialchars($aptDateText); ?></span>
+            </div>
+            <?php endif; ?>
+        </header>
+
+        <div class="confirm-body">
+            <?php if ($error): ?>
+            <section class="panel panel-pad" role="status">
+                <p class="confirm-lead">Randevu bu bağlantıyla açılamadı</p>
+                <p class="mb-0"><?php echo htmlspecialchars($error); ?></p>
+                <p class="confirm-foot">Randevunuzla ilgili bir değişiklik için lütfen doğrudan bizimle iletişime geçin.</p>
+            </section>
+            <?php elseif ($processed): ?>
+            <section class="panel panel-pad" role="status">
+                <p class="confirm-state">
+                    <?php if ($wasCancelled): ?>
+                    <span class="mark mark-cancelled">Randevu iptal edildi</span>
+                    <?php else: ?>
+                    <span class="mark mark-confirmed">Yanıtınız alındı</span>
+                    <?php endif; ?>
+                </p>
+                <p class="confirm-lead mb-0"><?php echo htmlspecialchars($success); ?></p>
+            </section>
+            <?php elseif ($appointment): ?>
+            <section class="panel panel-pad">
+                <p class="confirm-lead">Merhaba <?php echo htmlspecialchars($client); ?>,</p>
+                <p class="mb-0">Yukarıdaki randevunuza gelebilecek misiniz? Lütfen aşağıdan yanıtlayın.</p>
+                <form method="POST" class="confirm-actions">
+                    <button type="submit" name="action" value="confirm" class="btn btn-primary btn-lg btn-block">
+                        Randevumu onaylıyorum
+                    </button>
+                    <button type="submit" name="action" value="cancel" class="btn btn-outline-danger btn-lg btn-block">
+                        Gelemeyeceğim, iptal et
+                    </button>
+                </form>
+                <p class="confirm-foot">Yanıt vermezseniz randevunuz geçerli kabul edilecektir.</p>
+            </section>
+            <?php endif; ?>
         </div>
-        
-        <?php if ($error): ?>
-            <div class="message error">
-                <p><?php echo htmlspecialchars($error); ?></p>
-            </div>
-        <?php elseif ($processed): ?>
-            <div class="message success">
-                <p><?php echo htmlspecialchars($success); ?></p>
-            </div>
-        <?php elseif ($appointment): ?>
-            <div class="greeting">
-                Merhaba <?php echo htmlspecialchars($client); ?>
-            </div>
-            
-            <div class="info-box">
-                <div class="info-row">
-                    <span class="label">Tarih</span>
-                    <span class="value">
-                        <?php 
-                        $date = new DateTime($appointment['appointment_date']);
-                        echo $date->format('d.m.Y') . ' ' . $gunler[$date->format('l')];
-                        ?>
-                    </span>
-                </div>
-                <div class="info-row">
-                    <span class="label">Saat</span>
-                    <span class="value"><?php echo date('H:i', strtotime($appointment['appointment_time'])); ?></span>
-                </div>
-            </div>
-            
-            <form method="POST">
-                <button type="submit" name="action" value="confirm" class="btn btn-confirm">
-                    Geleceğim
-                </button>
-                <button type="submit" name="action" value="cancel" class="btn btn-cancel">
-                    Gelemeyeceğim
-                </button>
-            </form>
-            
-            <p class="footer-text">
-                Yanıt vermezseniz randevunuz geçerli kabul edilecektir.
-            </p>
-        <?php endif; ?>
-    </div>
+    </main>
 </body>
 </html>

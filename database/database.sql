@@ -116,6 +116,18 @@ CREATE TABLE IF NOT EXISTS `users` (
 INSERT INTO `users` (`id`, `name`, `email`, `password`, `role`, `status`, `remember_token`, `token_expires`, `created_at`) VALUES
 	(4, 'Admin', 'admin@gmail.com', '$2y$10$ycjBP0Hdm83F/YStPtPQ0O6avCTOxJTJaWc9XduwamENW.BJDeSUu', 'admin', 'active', NULL, NULL, '2025-05-30 13:45:41');
 
+-- Uygulama ayarları (Seans Ayarları: varsayılan ücret ve seans süresi)
+CREATE TABLE IF NOT EXISTS `app_settings` (
+  `setting_key` varchar(64) NOT NULL,
+  `setting_value` text NOT NULL,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`setting_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT IGNORE INTO `app_settings` (`setting_key`, `setting_value`) VALUES
+  ('session_fee', '3000'),
+  ('session_minutes', '50');
+
 /*!40103 SET TIME_ZONE=IFNULL(@OLD_TIME_ZONE, 'system') */;
 /*!40101 SET SQL_MODE=IFNULL(@OLD_SQL_MODE, '') */;
 /*!40014 SET FOREIGN_KEY_CHECKS=IFNULL(@OLD_FOREIGN_KEY_CHECKS, 1) */;

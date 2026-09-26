@@ -1,6 +1,8 @@
 <?php
 session_start();
 require_once 'config/database.php';
+require_once 'includes/settings.php';
+require_once 'includes/phone.php';
 
 // Tema kontrolü
 if (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark') {
@@ -14,376 +16,512 @@ if (!isset($_SESSION['user_id'])) {
     exit();
 }
 
-// İstatistikleri veritabanından çek
+// Seans süresi ve varsayılan ücret: yönetim panelindeki Seans Ayarları
+$sessionMinutes = getSessionMinutes($db);
+$defaultAmount = getSessionFee($db);
+
+$trDays = ['Monday' => 'Pazartesi', 'Tuesday' => 'Salı', 'Wednesday' => 'Çarşamba', 'Thursday' => 'Perşembe', 'Friday' => 'Cuma', 'Saturday' => 'Cumartesi', 'Sunday' => 'Pazar'];
+$trMonths = [1 => 'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+$methodNames = ['cash' => 'Nakit', 'card' => 'Kart', 'bank_transfer' => 'Havale/EFT'];
+
+$nowTs = time();
+$todayStr = date('Y-m-d');
+$tomorrowStr = date('Y-m-d', strtotime('+1 day'));
+
+function trDateLong($ts, $trDays, $trMonths) {
+    return date('j', $ts) . ' ' . $trMonths[(int) date('n', $ts)] . ' ' . $trDays[date('l', $ts)];
+}
+
+function dayLabel($dateStr, $todayStr, $tomorrowStr, $trDays, $trMonths) {
+    $ts = strtotime($dateStr);
+    if ($dateStr === $todayStr) return 'Bugün';
+    if ($dateStr === $tomorrowStr) return 'Yarın, ' . $trDays[date('l', $ts)];
+    return $trDays[date('l', $ts)] . ', ' . date('j', $ts) . ' ' . $trMonths[(int) date('n', $ts)];
+}
+
+function telHref($phone) {
+    return 'tel:' . preg_replace('/[^0-9+]/', '', (string) $phone);
+}
+
+function money($amount) {
+    return '₺' . number_format((float) $amount, (floor($amount) == $amount) ? 0 : 2, ',', '.');
+}
+
+$userName = '';
+$todayList = [];
+$upcoming = [];
+$unpaid = [];
+$unpaidCount = 0;
+$nextFuture = null;
 try {
-    // Toplam danışan sayısı
-    $stmt = $db->query("SELECT COUNT(*) FROM clients");
-    $total_clients = $stmt->fetchColumn();
+    $stmt = $db->prepare("SELECT name FROM users WHERE id = ?");
+    $stmt->execute([$_SESSION['user_id']]);
+    $userName = (string) ($stmt->fetchColumn() ?: '');
 
-    // Bugünkü randevu sayısı
-    $stmt = $db->prepare("SELECT COUNT(*) FROM appointments WHERE appointment_date = CURDATE()");
-    $stmt->execute();
-    $today_appointments = $stmt->fetchColumn();
-
-    // Bugünkü tamamlanan randevu sayısı
-    $stmt = $db->prepare("SELECT COUNT(*) FROM appointments WHERE appointment_date = CURDATE() AND appointment_time <= CURTIME()");
-    $stmt->execute();
-    $completed_appointments = $stmt->fetchColumn();
-
-    // Ödeme yapılmamış randevuları çek
+    // Bugünün tüm randevuları
     $stmt = $db->prepare("
-        SELECT a.*, c.name as client_name, TIME_FORMAT(a.appointment_time, '%H:%i') as formatted_time
-        FROM appointments a 
-        JOIN clients c ON a.client_id = c.id 
+        SELECT a.id, a.client_id, a.appointment_date, a.appointment_time, a.status, a.notes,
+               c.name AS client_name, c.phone AS client_phone,
+               p.id AS payment_id, p.amount AS paid_amount, p.payment_method
+        FROM appointments a
+        JOIN clients c ON a.client_id = c.id
+        LEFT JOIN payments p ON p.appointment_id = a.id
+        WHERE a.appointment_date = CURDATE()
+        ORDER BY a.appointment_time ASC
+    ");
+    $stmt->execute();
+    $todayList = $stmt->fetchAll();
+
+    // Önümüzdeki 7 gün (yarından itibaren)
+    $stmt = $db->prepare("
+        SELECT a.id, a.client_id, a.appointment_date, a.appointment_time, a.status,
+               c.name AS client_name, c.phone AS client_phone
+        FROM appointments a
+        JOIN clients c ON a.client_id = c.id
+        WHERE a.appointment_date > CURDATE()
+          AND a.appointment_date <= DATE_ADD(CURDATE(), INTERVAL 7 DAY)
+          AND (a.status IS NULL OR a.status <> 'iptal')
+        ORDER BY a.appointment_date ASC, a.appointment_time ASC
+        LIMIT 14
+    ");
+    $stmt->execute();
+    $upcoming = $stmt->fetchAll();
+
+    // Bugünden sonraki ilk seans (bugün başka seans yoksa gösterilir)
+    $stmt = $db->prepare("
+        SELECT a.id, a.client_id, a.appointment_date, a.appointment_time, c.name AS client_name
+        FROM appointments a
+        JOIN clients c ON a.client_id = c.id
+        WHERE a.appointment_date > CURDATE() AND (a.status IS NULL OR a.status <> 'iptal')
+        ORDER BY a.appointment_date ASC, a.appointment_time ASC
+        LIMIT 1
+    ");
+    $stmt->execute();
+    $nextFuture = $stmt->fetch() ?: null;
+
+    // Ödeme bekleyen geçmiş seanslar (iptaller hariç)
+    $unpaidWhere = "
+        FROM appointments a
+        JOIN clients c ON a.client_id = c.id
         LEFT JOIN payments p ON a.id = p.appointment_id
         WHERE (a.appointment_date < CURDATE() OR (a.appointment_date = CURDATE() AND a.appointment_time < CURTIME()))
-        AND p.id IS NULL
+          AND p.id IS NULL
+          AND (a.status IS NULL OR a.status <> 'iptal')
+    ";
+    $unpaidCount = (int) $db->query("SELECT COUNT(*) " . $unpaidWhere)->fetchColumn();
+    $stmt = $db->query("
+        SELECT a.id, a.client_id, a.appointment_date, a.appointment_time, c.name AS client_name
+        " . $unpaidWhere . "
         ORDER BY a.appointment_date DESC, a.appointment_time DESC
         LIMIT 5
     ");
-    $stmt->execute();
-    $unpaid_appointments = $stmt->fetchAll();
-
-    // Bu haftaki randevu sayısı
-    $stmt = $db->prepare("
-        SELECT COUNT(*) FROM appointments 
-        WHERE appointment_date BETWEEN DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY) 
-        AND DATE_ADD(DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY), INTERVAL 6 DAY)
-    ");
-    $stmt->execute();
-    $week_appointments = $stmt->fetchColumn();
-
-    // Bu ayki randevu sayısı
-    $stmt = $db->prepare("
-        SELECT COUNT(*) FROM appointments 
-        WHERE appointment_date BETWEEN DATE_FORMAT(CURDATE(), '%Y-%m-01') 
-        AND LAST_DAY(CURDATE())
-    ");
-    $stmt->execute();
-    $month_appointments = $stmt->fetchColumn();
-
-    // Bugünkü randevuları çek
-    $stmt = $db->prepare("
-        SELECT a.*, c.name as client_name, c.phone as client_phone,
-               TIME_FORMAT(a.appointment_time, '%H:%i') as formatted_time,
-               CASE 
-                   WHEN a.appointment_date = CURDATE() AND a.appointment_time > CURTIME() THEN 'upcoming'
-                   WHEN a.appointment_date = CURDATE() AND a.appointment_time <= CURTIME() THEN 'past'
-                   WHEN a.appointment_date > CURDATE() THEN 'future'
-                   ELSE 'past'
-               END as appointment_status
-        FROM appointments a 
-        JOIN clients c ON a.client_id = c.id 
-        WHERE (a.appointment_date = CURDATE() AND a.appointment_time > CURTIME())
-           OR a.appointment_date > CURDATE()
-        ORDER BY a.appointment_date ASC, a.appointment_time ASC
-        LIMIT 10
-    ");
-    $stmt->execute();
-    $today_appointments_list = $stmt->fetchAll();
-
-} catch(PDOException $e) {
+    $unpaid = $stmt->fetchAll();
+} catch (PDOException $e) {
     $_SESSION['error'] = "Veritabanı hatası: " . $e->getMessage();
-    $total_clients = 0;
-    $today_appointments = 0;
-    $week_appointments = 0;
-    $month_appointments = 0;
-    $today_appointments_list = [];
 }
+
+// Şimdi / sıradaki seans
+$current = null;
+$next = null;
+$doneCount = 0;
+$activeCount = 0;
+$prevEndBeforeFocus = null;
+foreach ($todayList as $apt) {
+    if ($apt['status'] === 'iptal') {
+        continue;
+    }
+    $activeCount++;
+    $start = strtotime($apt['appointment_date'] . ' ' . $apt['appointment_time']);
+    $end = $start + $sessionMinutes * 60;
+    if ($end <= $nowTs) {
+        $doneCount++;
+        $prevEndBeforeFocus = $end;
+    } elseif ($start <= $nowTs && $nowTs < $end) {
+        $current = $apt;
+    } elseif ($start > $nowTs && $next === null) {
+        $next = $apt;
+    }
+}
+$remainingCount = $activeCount - $doneCount - ($current ? 1 : 0);
+
+$nowMode = $current ? 'current' : ($next ? 'next' : 'none');
+$focus = $current ?: $next;
+$focusStart = $focus ? strtotime($focus['appointment_date'] . ' ' . $focus['appointment_time']) : null;
+
+// Pirinç halkanın bekleme penceresi: önceki seansın bitişi (yoksa en fazla 4 saat öncesi) → sıradaki seans
+$windowStart = null;
+if ($nowMode === 'next') {
+    $windowStart = max($prevEndBeforeFocus ?: 0, $focusStart - 4 * 3600, strtotime('today 07:00'));
+    $windowStart = min($windowStart, $nowTs - 60);
+}
+
+// Bekleme etiketi (sunucu tarafı ilk değer; app.js canlı günceller)
+$ringValue = '';
+$ringUnit = '';
+$statusText = '';
+if ($nowMode === 'current') {
+    $left = max(0, (int) ceil(($focusStart + $sessionMinutes * 60 - $nowTs) / 60));
+    $ringValue = (string) $left;
+    $ringUnit = 'dk kaldı';
+    $statusText = 'Seans sürüyor · <strong>' . $left . ' dakika kaldı</strong>';
+} elseif ($nowMode === 'next') {
+    $mins = max(1, (int) ceil(($focusStart - $nowTs) / 60));
+    if ($mins < 60) {
+        $ringValue = (string) $mins;
+        $ringUnit = 'dk sonra';
+        $statusText = '<strong>' . $mins . ' dakika sonra başlıyor</strong>';
+    } else {
+        $h = intdiv($mins, 60);
+        $m = $mins % 60;
+        $ringValue = $m === 0 ? $h . ' sa' : $h . ':' . str_pad((string) $m, 2, '0', STR_PAD_LEFT);
+        $ringUnit = 'sonra';
+        $statusText = '<strong>' . ($m === 0 ? "$h saat" : "$h saat $m dakika") . ' sonra başlıyor</strong>';
+    }
+}
+
+// Şu anki seans ödenmiş mi (Ödeme al düğmesi için)
+$focusPaid = $focus && !empty($focus['payment_id']);
+
+// Saat ekseni: seanslar arası boşluklar süreleriyle orantılı yer kaplar, "şimdi" çizgisi dakikasına oturur
+function gapLabel($minutes) {
+    $h = intdiv($minutes, 60);
+    $m = $minutes % 60;
+    if ($h === 0) return $m . ' dk boş';
+    return $h . ' sa' . ($m ? ' ' . $m . ' dk' : '') . ' boş';
+}
+
+$dayItems = [];
+$nowPlaced = false;
+$prevEnd = null;
+foreach ($todayList as $apt) {
+    $start = strtotime($apt['appointment_date'] . ' ' . $apt['appointment_time']);
+    $end = $start + $sessionMinutes * 60;
+
+    if ($prevEnd !== null && $start - $prevEnd >= 15 * 60) {
+        $gapMinutes = (int) round(($start - $prevEnd) / 60);
+        $nowInGap = !$nowPlaced && $nowTs >= $prevEnd && $nowTs < $start;
+        $dayItems[] = [
+            'type' => 'gap',
+            'from' => $prevEnd,
+            'to' => $start,
+            'minutes' => $gapMinutes,
+            'height' => max(28, min(120, (int) round($gapMinutes * 0.5))),
+            'now' => $nowInGap,
+            'pct' => $nowInGap ? round(($nowTs - $prevEnd) / ($start - $prevEnd) * 100, 1) : null,
+        ];
+        if ($nowInGap) {
+            $nowPlaced = true;
+        }
+    } elseif (!$nowPlaced && $nowTs < $start && ($prevEnd === null || $nowTs >= $prevEnd - 60)) {
+        $dayItems[] = ['type' => 'now'];
+        $nowPlaced = true;
+    }
+
+    if (!$nowPlaced && $nowTs >= $start && $nowTs < $end && $apt['status'] !== 'iptal') {
+        $nowPlaced = true; // Şu an seansta: satırın kendisi vurgulanır
+    }
+
+    $dayItems[] = ['type' => 'row', 'apt' => $apt, 'start' => $start, 'end' => $end];
+    $prevEnd = max($prevEnd ?? 0, $end);
+}
+if (!$nowPlaced && !empty($todayList)) {
+    $dayItems[] = ['type' => 'now'];
+}
+
+// Yaklaşanları güne göre grupla
+$upcomingByDay = [];
+foreach ($upcoming as $apt) {
+    $upcomingByDay[$apt['appointment_date']][] = $apt;
+}
+
+$pageTitle = 'Bugün';
+$pageSubtitle = trDateLong($nowTs, $trDays, $trMonths);
+$appbarClass = 'appbar--wool';
+$themeColor = '#4B1D35';
 
 // Header'ı dahil et
 include 'includes/header.php';
 ?>
-<style>
-.past-appointment {
-    background-color: #f8f9fa !important;
-    opacity: 0.7;
-}
-
-.past-appointment td {
-    color: #6c757d;
-}
-
-.add-appointment-btn {
-    opacity: 0;
-    transition: opacity 0.2s;
-}
-
-.calendar-day:hover .add-appointment-btn {
-    opacity: 1;
-}
-
-.appointment-item.past {
-    background: #ffc107;
-    color: #000;
-}
-
-.appointment-item.today {
-    background: #0d6efd;
-    color: #fff;
-}
-
-.appointment-item.future {
-    background: #198754;
-    color: #fff;
-}
-
-.welcome-icon {
-    width: 64px;
-    height: 64px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(45deg, #0d6efd, #0dcaf0);
-    box-shadow: 0 4px 15px rgba(13, 110, 253, 0.2);
-}
-
-.welcome-icon i {
-    font-size: 2rem;
-}
-</style>
-<body class="<?php echo $themeClass; ?>">
+<body class="<?php echo $themeClass; ?>" data-page="dashboard">
     <div class="wrapper">
         <?php include 'includes/sidebar.php'; ?>
 
-        <!-- Page Content -->
-        <div id="content">
-            <nav class="navbar navbar-expand-lg navbar-light bg-light">
-                <div class="container-fluid">
-                    <button type="button" id="sidebarCollapse" class="btn btn-secondary">
-                        <i class="bi bi-list"></i>
-                    </button>
-                    <div class="ms-auto">
-                        <button type="button" id="themeToggle" class="btn btn-outline-secondary me-2">
-                            <i class="bi bi-moon-fill"></i>
-                        </button>
-                        <a href="auth/logout" class="btn btn-outline-danger">
-                            <i class="bi bi-box-arrow-right"></i> Çıkış Yap
-                        </a>
-                    </div>
-                </div>
-            </nav>
+        <main id="content" tabindex="-1">
+            <?php include 'includes/topbar.php'; ?>
 
-            <div class="container-fluid p-4">
-                <!-- Hoş Geldiniz Kartı -->
-                <div class="card border-0 shadow-sm">
-                    <div class="card-body p-4">
-                        <div class="d-flex align-items-center">
-                            <div class="flex-shrink-0">
-                                <div class="welcome-icon bg-primary text-white rounded-circle p-3">
-                                    <i class="bi bi-person-circle fs-1"></i>
+            <div class="page dash">
+                <!-- Şimdi / sıradaki: ekranın baskın alanı -->
+                <div class="dash-now page-top">
+                    <section class="now wool" data-now data-now-mode="<?php echo $nowMode; ?>"
+                             <?php if ($focusStart): ?>data-start="<?php echo date('Y-m-d\TH:i:s', $focusStart); ?>"<?php endif; ?>
+                             <?php if ($windowStart): ?>data-window-start="<?php echo date('Y-m-d\TH:i:s', $windowStart); ?>"<?php endif; ?>
+                             data-length="<?php echo $sessionMinutes; ?>"
+                             aria-label="<?php echo $nowMode === 'current' ? 'Şu anki seans' : 'Sıradaki seans'; ?>">
+                        <?php if ($focus): ?>
+                        <div class="now-grid">
+                            <div>
+                                <time class="now-time" datetime="<?php echo date('Y-m-d\TH:i', $focusStart); ?>"><?php echo date('H:i', $focusStart); ?></time>
+                                <span class="now-name"><?php echo htmlspecialchars($focus['client_name']); ?></span>
+                                <p class="now-status" data-now-status aria-live="polite"><?php echo $statusText; ?></p>
+                            </div>
+                            <div class="ring" aria-hidden="true">
+                                <svg viewBox="0 0 120 120">
+                                    <circle class="ring-track" cx="60" cy="60" r="52"></circle>
+                                    <circle class="ring-fill" cx="60" cy="60" r="52"></circle>
+                                </svg>
+                                <div class="ring-label">
+                                    <span class="ring-value" data-ring-value><?php echo htmlspecialchars($ringValue); ?></span>
+                                    <span class="ring-unit" data-ring-unit><?php echo htmlspecialchars($ringUnit); ?></span>
                                 </div>
                             </div>
-                            <div class="flex-grow-1 ms-3">
-                                <h4 class="mb-1">Hoş Geldiniz, <?php 
-                                    $stmt = $db->prepare("SELECT name FROM users WHERE id = ?");
-                                    $stmt->execute([$_SESSION['user_id']]);
-                                    $user = $stmt->fetch();
-                                    echo htmlspecialchars($user['name']); 
-                                ?></h4>
-                                <p class="mb-0">
-                                    <?php
-                                    $remaining = $today_appointments - $completed_appointments;
-                                    if ($today_appointments > 0) {
-                                        if ($remaining > 0) {
-                                            echo "Bugün toplam {$today_appointments} randevunuz var, {$completed_appointments} tanesini tamamladınız, {$remaining} randevunuz kaldı.";
-                                        } else {
-                                            echo "Bugün tüm randevularınızı tamamladınız. İyi dinlenmeler!";
-                                        }
-                                    } else {
-                                        echo "Bugün randevunuz bulunmuyor.";
-                                    }
-                                    ?>
-                                </p>
-                            </div>
                         </div>
-                    </div>
+                        <div class="now-actions">
+                            <?php if ($nowMode === 'current' && !$focusPaid): ?>
+                            <button type="button" class="btn btn-on-wool-solid" data-bs-toggle="modal" data-bs-target="#quickPaymentModal"
+                                    data-pay="<?php echo (int) $focus['id']; ?>"
+                                    data-pay-name="<?php echo htmlspecialchars($focus['client_name']); ?>"
+                                    data-pay-time="<?php echo date('H:i', $focusStart); ?>"
+                                    data-pay-date="Bugün"
+                                    data-pay-amount="<?php echo htmlspecialchars(feeInputValue($defaultAmount)); ?>">
+                                <i class="bi bi-wallet2" aria-hidden="true"></i> Ödeme al
+                            </button>
+                            <?php elseif ($nowMode === 'next' && !empty($focus['client_phone'])): ?>
+                            <a href="<?php echo htmlspecialchars(telHref($focus['client_phone'])); ?>" class="btn btn-on-wool">
+                                <i class="bi bi-telephone" aria-hidden="true"></i> Ara
+                            </a>
+                            <?php endif; ?>
+                            <a href="client-details?id=<?php echo (int) $focus['client_id']; ?>" class="btn btn-on-wool">
+                                <i class="bi bi-person" aria-hidden="true"></i> Danışan kartı
+                            </a>
+                        </div>
+                        <?php else: ?>
+                        <p class="now-empty-title"><?php echo $activeCount > 0 ? 'Bugünün seansları bitti' : 'Bugün seans yok'; ?></p>
+                        <?php if ($nextFuture): $nfTs = strtotime($nextFuture['appointment_date'] . ' ' . $nextFuture['appointment_time']); ?>
+                        <p class="now-status">
+                            Sıradaki: <strong><?php echo htmlspecialchars(dayLabel($nextFuture['appointment_date'], $todayStr, $tomorrowStr, $trDays, $trMonths)); ?>, <?php echo date('H:i', $nfTs); ?></strong>
+                            · <?php echo htmlspecialchars($nextFuture['client_name']); ?>
+                        </p>
+                        <?php else: ?>
+                        <p class="now-status">Takvimde yaklaşan seans görünmüyor.</p>
+                        <?php endif; ?>
+                        <div class="now-actions">
+                            <a href="appointments?view=calendar" class="btn btn-on-wool">
+                                <i class="bi bi-calendar3" aria-hidden="true"></i> Takvimi aç
+                            </a>
+                        </div>
+                        <?php endif; ?>
+
+                        <div class="now-summary">
+                            <span><b><?php echo $activeCount; ?></b> seans bugün</span>
+                            <span><b><?php echo $doneCount; ?></b> tamamlandı</span>
+                            <span><b><?php echo max(0, $remainingCount); ?></b> kaldı</span>
+                        </div>
+                    </section>
                 </div>
 
-                <?php if (count($unpaid_appointments) > 0): ?>
-                <div class="alert alert-warning alert-dismissible fade show" role="alert">
-                    <div class="d-flex align-items-center">
+                <?php if ($unpaidCount > 0): ?>
+                <!-- Açık para kalmaz -->
+                <details class="due-box dash-due" data-open-desktop>
+                    <summary class="due">
+                        <span class="due-count"><?php echo $unpaidCount; ?></span>
                         <div>
-                            <strong>Ödeme Bekleyen Randevular!</strong>
-                            <ul class="mb-0 mt-2">
-                                <?php foreach ($unpaid_appointments as $appointment): ?>
-                                <li>
-                                    <?php echo htmlspecialchars($appointment['client_name']); ?> - 
-                                    <?php echo date('d.m.Y', strtotime($appointment['appointment_date'])); ?> 
-                                    <?php echo $appointment['formatted_time']; ?>
-                                </li>
-                                <?php endforeach; ?>
-                            </ul>
+                            <p class="due-title"><?php echo $unpaidCount; ?> seans ödeme bekliyor</p>
+                            <p class="due-meta">
+                                <?php
+                                $names = array_map(function ($a) { return explode(' ', trim($a['client_name']))[0]; }, array_slice($unpaid, 0, 3));
+                                echo htmlspecialchars(implode(', ', $names)) . ($unpaidCount > 3 ? ' ve ' . ($unpaidCount - 3) . ' kişi daha' : '');
+                                ?>
+                            </p>
                         </div>
+                        <i class="bi bi-chevron-right row-chevron" aria-hidden="true"></i>
+                    </summary>
+                    <div class="list">
+                        <?php foreach ($unpaid as $apt):
+                            $ts = strtotime($apt['appointment_date'] . ' ' . $apt['appointment_time']);
+                        ?>
+                        <div class="row-item">
+                            <span class="row-time"><?php echo date('H:i', $ts); ?><small><?php echo date('j', $ts) . ' ' . mb_substr($trMonths[(int) date('n', $ts)], 0, 3); ?></small></span>
+                            <a class="row-main text-decoration-none" href="client-details?id=<?php echo (int) $apt['client_id']; ?>">
+                                <p class="row-title"><span><?php echo htmlspecialchars($apt['client_name']); ?></span></p>
+                                <p class="row-meta"><span class="mark mark-unpaid">Ödenmedi</span></p>
+                            </a>
+                            <div class="row-trail">
+                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#quickPaymentModal"
+                                        data-pay="<?php echo (int) $apt['id']; ?>"
+                                        data-pay-name="<?php echo htmlspecialchars($apt['client_name']); ?>"
+                                        data-pay-time="<?php echo date('H:i', $ts); ?>"
+                                        data-pay-date="<?php echo htmlspecialchars(trDateLong($ts, $trDays, $trMonths)); ?>"
+                                        data-pay-amount="<?php echo htmlspecialchars(feeInputValue($defaultAmount)); ?>">
+                                    Ödeme al
+                                </button>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
                     </div>
-                    <div class="mt-3">
-                        <a href="payments" class="btn btn-secondary btn-sm">
-                            <i class="bi bi-cash"></i> Ödemeleri Görüntüle
-                        </a>
-                    </div>
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
-                </div>
+                    <?php if ($unpaidCount > count($unpaid)): ?>
+                    <p class="due-foot"><a href="payments">Kalan <?php echo $unpaidCount - count($unpaid); ?> seans Kasa’da <i class="bi bi-arrow-right" aria-hidden="true"></i></a></p>
+                    <?php endif; ?>
+                </details>
                 <?php endif; ?>
 
-                <!-- İstatistik Kartları -->
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="stats-card d-flex align-items-center">
-                            <div class="stats-info flex-grow-1">
-                                <div class="number"><?php echo $total_clients; ?></div>
-                                <div class="label">Toplam Danışan</div>
-                            </div>
-                            <div class="icon text-primary ms-3">
-                                <i class="bi bi-people"></i>
-                            </div>
-                        </div>
+                <!-- Günün programı: saat ekseni -->
+                <section class="section dash-today" aria-labelledby="todayTitle">
+                    <div class="section-head">
+                        <h2 class="section-title" id="todayTitle">Günün programı</h2>
+                        <a href="appointments" class="btn btn-quiet btn-sm">Tüm randevular</a>
                     </div>
-                    <div class="col-md-4">
-                        <div class="stats-card d-flex align-items-center">
-                            <div class="stats-info flex-grow-1">
-                                <div class="number">
-                                    <?php echo $today_appointments; ?>
-                                    <?php if ($completed_appointments > 0): ?>
-                                        <span class="text-danger ms-1" style="font-size: 0.35em;">-<?php echo $completed_appointments; ?></span>
-                                    <?php endif; ?>
-                                </div>
-                                <div class="label">Bugünkü Randevular</div>
-                            </div>
-                            <div class="icon text-success ms-3">
-                                <i class="bi bi-calendar-check"></i>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="stats-card d-flex align-items-center">
-                            <div class="stats-info flex-grow-1">
-                                <div class="number"><?php echo $week_appointments; ?></div>
-                                <div class="label">Bu Haftaki Randevular</div>
-                            </div>
-                            <div class="icon text-info ms-3">
-                                <i class="bi bi-calendar-week"></i>
-                            </div>
-                        </div>
-                    </div>
-                </div>
 
-                <!-- Yaklaşan Randevular -->
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">
-                            <i class="bi bi-calendar-check me-2"></i>
-                            Yaklaşan Randevular
-                        </h5>
-                        <a href="appointments" class="btn btn-sm btn-primary">
-                            <i class="bi bi-calendar3"></i> Tümünü Görüntüle
-                        </a>
+                    <?php if (empty($todayList)): ?>
+                    <div class="empty">
+                        <p class="empty-title">Bugün için randevu yok</p>
+                        <p>Yeni bir seans eklemek için alttaki “Randevu” düğmesine dokunun; danışana randevu bilgisi SMS’le otomatik gider.</p>
                     </div>
-                    <div class="card-body">
-                        <?php if (count($today_appointments_list) > 0): ?>
-                            <?php foreach ($today_appointments_list as $appointment): 
-                                $appointment_date = strtotime($appointment['appointment_date']);
-                                $appointment_datetime = strtotime($appointment['appointment_date'] . ' ' . $appointment['appointment_time']);
-                                $now = time();
-                                $day_name = date('l', $appointment_date);
-                                
-                                // Günlere göre arka plan renkleri (açık/soft tonlar)
-                                $bg_colors = [
-                                    'Monday' => 'soft-blue',
-                                    'Tuesday' => 'soft-green',
-                                    'Wednesday' => 'soft-cyan',
-                                    'Thursday' => 'soft-yellow',
-                                    'Friday' => 'soft-pink',
-                                    'Saturday' => 'soft-purple',
-                                    'Sunday' => 'soft-lavender'
-                                ];
-                                
-                                $bg_class = $bg_colors[$day_name];
-                                
-                                // Türkçe gün isimleri
-                                $turkish_days = [
-                                    'Monday' => 'Pazartesi',
-                                    'Tuesday' => 'Salı',
-                                    'Wednesday' => 'Çarşamba',
-                                    'Thursday' => 'Perşembe',
-                                    'Friday' => 'Cuma',
-                                    'Saturday' => 'Cumartesi',
-                                    'Sunday' => 'Pazar'
-                                ];
-                                
-                                // Ödeme durumunu kontrol et
-                                $payment_status = '';
-                                try {
-                                    $payment_stmt = $db->prepare("SELECT id FROM payments WHERE appointment_id = ?");
-                                    $payment_stmt->execute([$appointment['id']]);
-                                    $payment_exists = $payment_stmt->fetch();
-                                    $payment_status = $payment_exists ? 'paid' : 'unpaid';
-                                } catch(PDOException $e) {
-                                    $payment_status = 'unknown';
-                                }
+                    <?php else: ?>
+                    <div class="list day-rail">
+                        <?php foreach ($dayItems as $item): ?>
+                            <?php if ($item['type'] === 'now'): ?>
+                        <div class="now-line" role="presentation"><span>Şimdi <span data-now-clock><?php echo date('H:i', $nowTs); ?></span></span></div>
+                            <?php elseif ($item['type'] === 'gap'): ?>
+                        <div class="day-gap" style="height: <?php echo (int) $item['height']; ?>px"
+                             data-gap-from="<?php echo date('Y-m-d\TH:i:s', $item['from']); ?>"
+                             data-gap-to="<?php echo date('Y-m-d\TH:i:s', $item['to']); ?>">
+                            <span class="day-gap-label"><?php echo htmlspecialchars(gapLabel($item['minutes'])); ?></span>
+                            <?php if ($item['now']): ?>
+                            <div class="now-line" role="presentation" style="top: <?php echo $item['pct']; ?>%"><span>Şimdi <span data-now-clock><?php echo date('H:i', $nowTs); ?></span></span></div>
+                            <?php endif; ?>
+                        </div>
+                            <?php else:
+                                $apt = $item['apt'];
+                                $start = $item['start'];
+                                $end = $item['end'];
+                                $isCancelled = $apt['status'] === 'iptal';
+                                $isCurrent = !$isCancelled && $start <= $nowTs && $nowTs < $end;
+                                $isPast = !$isCurrent && $start < $nowTs;
+                                $isPaid = !empty($apt['payment_id']);
                             ?>
-                            <div class="appointment-item <?php echo $bg_class; ?> mb-2 p-3 rounded">
-                                <div class="appointment-main">
-                                    <div class="appointment-header">
-                                        <div class="client-name fw-bold">
-                                            <i class="bi bi-person-circle me-1"></i>
-                                            <?php echo htmlspecialchars($appointment['client_name']); ?>
-                                        </div>
-                                        <?php if ($payment_status === 'paid'): ?>
-                                            <span class="badge bg-success">Ödendi</span>
-                                        <?php elseif ($payment_status === 'unpaid' && strtotime($appointment['appointment_date'] . ' ' . $appointment['appointment_time']) < time()): ?>
-                                            <span class="badge bg-warning">Ödenmedi</span>
-                                        <?php endif; ?>
-                                    </div>
-                                    <div class="appointment-datetime">
-                                        <div class="appointment-day">
-                                            <span class="badge bg-primary"><?php echo $turkish_days[$day_name]; ?></span>
-                                            <span class="ms-1">
-                                                <?php 
-                                                if (date('Y-m-d') == date('Y-m-d', $appointment_date)) {
-                                                    echo 'Bugün';
-                                                } elseif (date('Y-m-d', strtotime('+1 day')) == date('Y-m-d', $appointment_date)) {
-                                                    echo 'Yarın';
-                                                } else {
-                                                    echo date('d.m.Y', $appointment_date);
-                                                }
-                                                ?>
-                                            </span>
-                                        </div>
-                                        <div class="appointment-time">
-                                            <i class="bi bi-clock me-1"></i>
-                                            <span class="fw-semibold"><?php echo date('H:i', strtotime($appointment['appointment_time'])); ?></span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="appointment-actions">
-                                    <a href="client-details?id=<?php echo $appointment['client_id']; ?>" class="btn btn-sm btn-outline-primary me-1" title="Danışan Detayı">
-                                        <i class="bi bi-person"></i>
-                                    </a>
-                                    <a href="appointments" class="btn btn-sm btn-outline-secondary me-1" title="Randevu Detayı">
-                                        <i class="bi bi-calendar-check"></i>
-                                    </a>
-                                    <?php if ($payment_status === 'unpaid' && strtotime($appointment['appointment_date'] . ' ' . $appointment['appointment_time']) < time()): ?>
-                                    <a href="payments" class="btn btn-sm btn-warning" title="Ödeme Al">
-                                        <i class="bi bi-cash"></i>
-                                    </a>
+                        <div class="row-item<?php echo $isPast ? ' is-past' : ''; ?><?php echo $isCurrent ? ' is-current' : ''; ?><?php echo $isCancelled ? ' is-cancelled' : ''; ?>">
+                            <span class="row-time"><?php echo date('H:i', $start); ?></span>
+                            <a class="row-main text-decoration-none" href="client-details?id=<?php echo (int) $apt['client_id']; ?>">
+                                <p class="row-title"><span><?php echo htmlspecialchars($apt['client_name']); ?></span></p>
+                                <p class="row-meta">
+                                    <?php if ($isCancelled): ?>
+                                        <span class="mark mark-cancelled">İptal edildi</span>
+                                    <?php elseif ($isCurrent): ?>
+                                        <span class="mark mark-confirmed">Seansta · <?php echo date('H:i', $end); ?>’e kadar</span>
+                                    <?php elseif ($isPaid): ?>
+                                        <span class="mark mark-paid">Ödendi · <?php echo $methodNames[$apt['payment_method']] ?? ''; ?> <?php echo money($apt['paid_amount']); ?></span>
+                                    <?php elseif ($isPast): ?>
+                                        <span class="mark mark-unpaid">Ödenmedi</span>
+                                    <?php else: ?>
+                                        <span class="tnum"><?php echo htmlspecialchars(formatPhoneDisplay($apt['client_phone'])); ?></span>
                                     <?php endif; ?>
-                                </div>
-                            </div>
-                            <?php endforeach; ?>
-                        <?php else: ?>
-                            <div class="text-center py-4">
-                                <i class="bi bi-calendar-x display-1 text-muted mb-3"></i>
-                                <h6 class="text-muted">Yaklaşan randevu bulunmuyor</h6>
-                                <p class="text-muted mb-3">Yeni randevular oluşturmak için randevular sayfasını ziyaret edebilirsiniz.</p>
-                                <a href="appointments" class="btn btn-primary">
-                                    <i class="bi bi-plus-circle me-2"></i>Yeni Randevu Oluştur
+                                </p>
+                            </a>
+                            <div class="row-trail">
+                                <?php if (($isPast || $isCurrent) && !$isPaid && !$isCancelled): ?>
+                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#quickPaymentModal"
+                                        data-pay="<?php echo (int) $apt['id']; ?>"
+                                        data-pay-name="<?php echo htmlspecialchars($apt['client_name']); ?>"
+                                        data-pay-time="<?php echo date('H:i', $start); ?>"
+                                        data-pay-date="Bugün"
+                                        data-pay-amount="<?php echo htmlspecialchars(feeInputValue($defaultAmount)); ?>">
+                                    Ödeme al
+                                </button>
+                                <?php elseif (!$isPast && !$isCancelled && !empty($apt['client_phone'])): ?>
+                                <a href="<?php echo htmlspecialchars(telHref($apt['client_phone'])); ?>" class="btn btn-sm btn-secondary" aria-label="<?php echo htmlspecialchars($apt['client_name']); ?> adlı danışanı ara">
+                                    <i class="bi bi-telephone" aria-hidden="true"></i> Ara
                                 </a>
+                                <?php endif; ?>
                             </div>
-                        <?php endif; ?>
+                        </div>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
                     </div>
+                    <?php endif; ?>
+                </section>
+
+                <!-- Önümüzdeki günler -->
+                <section class="section dash-upcoming" aria-labelledby="upcomingTitle">
+                    <div class="section-head">
+                        <h2 class="section-title" id="upcomingTitle">Önümüzdeki günler</h2>
+                        <a href="appointments?view=calendar" class="btn btn-quiet btn-sm">Takvim</a>
+                    </div>
+                    <?php if (empty($upcomingByDay)): ?>
+                    <div class="empty">
+                        <p class="empty-title">Önümüzdeki 7 gün boş</p>
+                        <p>Yeni seanslar eklendikçe burada gün gün listelenir.</p>
+                    </div>
+                    <?php else: ?>
+                        <?php foreach ($upcomingByDay as $date => $items): ?>
+                        <div class="list-day"><?php echo htmlspecialchars(dayLabel($date, $todayStr, $tomorrowStr, $trDays, $trMonths)); ?><span><?php echo count($items); ?> seans</span></div>
+                        <div class="list">
+                            <?php foreach ($items as $apt): ?>
+                            <a class="row-item" href="client-details?id=<?php echo (int) $apt['client_id']; ?>">
+                                <span class="row-time"><?php echo date('H:i', strtotime($apt['appointment_time'])); ?></span>
+                                <span class="row-main">
+                                    <span class="row-title"><span><?php echo htmlspecialchars($apt['client_name']); ?></span></span>
+                                    <span class="row-meta d-block tnum"><?php echo htmlspecialchars(formatPhoneDisplay($apt['client_phone'])); ?></span>
+                                </span>
+                                <span class="row-trail"><i class="bi bi-chevron-right row-chevron" aria-hidden="true"></i></span>
+                            </a>
+                            <?php endforeach; ?>
+                        </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Hızlı ödeme paneli -->
+    <div class="modal fade" id="quickPaymentModal" tabindex="-1" aria-labelledby="quickPaymentTitle" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="quickPaymentTitle">Ödeme al</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="sheet-summary">
+                        <span class="row-time" data-pay-time></span>
+                        <div>
+                            <p class="row-title"><span data-pay-name></span></p>
+                            <p class="row-meta" data-pay-date></p>
+                        </div>
+                    </div>
+                    <form action="process/add-payment" method="POST" class="needs-validation" novalidate>
+                        <input type="hidden" name="appointment_id" value="">
+                        <input type="hidden" name="return_to" value="dashboard">
+                        <div class="field">
+                            <label for="qpAmount" class="form-label">Tutar (₺)</label>
+                            <input type="number" inputmode="decimal" class="form-control tnum" id="qpAmount" name="amount"
+                                   value="<?php echo htmlspecialchars(feeInputValue($defaultAmount)); ?>" data-default="<?php echo htmlspecialchars(feeInputValue($defaultAmount)); ?>"
+                                   step="0.01" min="0" required>
+                            <div class="invalid-feedback">Tutarı girin.</div>
+                        </div>
+                        <fieldset class="field">
+                            <legend class="form-label">Ödeme yöntemi</legend>
+                            <div class="choice">
+                                <input type="radio" name="payment_method" id="qpCash" value="cash" checked>
+                                <label for="qpCash"><i class="bi bi-cash-stack" aria-hidden="true"></i>Nakit</label>
+                                <input type="radio" name="payment_method" id="qpCard" value="card">
+                                <label for="qpCard"><i class="bi bi-credit-card" aria-hidden="true"></i>Kart</label>
+                                <input type="radio" name="payment_method" id="qpBank" value="bank_transfer">
+                                <label for="qpBank"><i class="bi bi-bank" aria-hidden="true"></i>Havale/EFT</label>
+                            </div>
+                        </fieldset>
+                        <div class="field">
+                            <label for="qpNotes" class="form-label">Not <span class="ink-3">(isteğe bağlı)</span></label>
+                            <textarea class="form-control" id="qpNotes" name="notes" rows="2"></textarea>
+                        </div>
+                        <div class="sheet-actions">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                            <button type="submit" class="btn btn-brass">Ödemeyi kaydet</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
     </div>
 
-<?php include 'includes/footer.php'; ?> 
+<?php include 'includes/footer.php'; ?>

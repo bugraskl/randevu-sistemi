@@ -1,0 +1,36 @@
+/* Kasa · Giderler — yalnızca tokenlar */
+
+/* Dönem seçimi: parçalı seçicinin altında tek satır */
+.kasa-period {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s-3);
+    margin: var(--s-4) 0 var(--s-3);
+    padding: 0 var(--s-1);
+}
+
+.kasa-period .form-label {
+    margin: 0;
+}
+
+.kasa-period .form-select {
+    width: auto;
+    min-width: 11rem;
+}
+
+/* Dört seçenekli ödeme yöntemi: telefonda 2×2, genişte tek sıra */
+.choice.choice-4 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 576px) {
+    .choice.choice-4 {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+/* Saat sütunu olmayan özet satırı: ad solda, tutar sağda */
+.sheet-summary.no-lead {
+    grid-template-columns: minmax(0, 1fr) auto;
+}
