@@ -8,7 +8,7 @@ PHP tabanlı profesyonel randevu yönetim sistemi. Psikolog, doktor ve benzeri m
 - ☀️ **Bugün Ekranı**: Sıradaki seans, canlı seans halkası, saat ekseninde günün programı ve ödeme bekleyen seanslar
 - 📱 **SMS Entegrasyonu**: NetGSM üzerinden randevu oluşturma ve hatırlatma SMS'leri
 - 👥 **Danışan Yönetimi**: Kapsamlı müşteri profili ve geçmiş takibi; randevu ekranından yeni danışan ekleme
-- ☎️ **Tek Telefon Biçimi**: `+90 (537) 221 23 23`, `05372212323`, `5372212323` gibi tüm girişler `05372212323` olarak kaydedilir
+- ☎️ **Tek Telefon Biçimi**: `+90 (500) 123 45 67`, `05001234567`, `5001234567` gibi tüm girişler `05001234567` olarak kaydedilir
 - 💰 **Ödeme Takibi**: Gelir ve gider yönetimi, tek dokunuşla ödeme alma
 - ⚙️ **Seans Ayarları**: Varsayılan seans ücreti ve süresi yönetim panelinden
 - 📊 **Raporlama**: Detaylı istatistik ve analiz raporları

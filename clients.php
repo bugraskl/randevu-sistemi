@@ -281,7 +281,7 @@ include 'includes/header.php';
                         </div>
                         <div class="field">
                             <label for="phone" class="form-label">Telefon</label>
-                            <input type="tel" class="form-control tnum" id="phone" name="phone" autocomplete="off" placeholder="0537 221 23 23" required>
+                            <input type="tel" class="form-control tnum" id="phone" name="phone" autocomplete="off" placeholder="0500 123 45 67" required>
                             <div class="invalid-feedback">Telefonu 10–11 rakam olarak, boşluksuz yazın (ör. 05321234567).</div>
                         </div>
                         <div class="field">

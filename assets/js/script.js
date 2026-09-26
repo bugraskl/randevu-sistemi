@@ -68,7 +68,7 @@ window.escapeHtml = function(value) {
         .replace(/'/g, '&#39;');
 };
 
-// Telefonu okunaklı göster: 05372212323 → 0537 221 23 23 (includes/phone.php formatPhoneDisplay ile aynı)
+// Telefonu okunaklı göster: 05001234567 → 0500 123 45 67 (includes/phone.php formatPhoneDisplay ile aynı)
 window.formatPhoneDisplay = function(phone) {
     let d = String(phone == null ? '' : phone).replace(/\D+/g, '');
     if (d.startsWith('00')) d = d.slice(2);

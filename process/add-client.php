@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 
-    // Telefonu tek biçime çevir (ör. +90 537 221 23 23 → 05372212323)
+    // Telefonu tek biçime çevir (ör. +90 500 123 45 67 → 05001234567)
     $phone = normalizePhone($phone);
     if ($phone === null) {
         $_SESSION['error'] = PHONE_FORMAT_HINT;

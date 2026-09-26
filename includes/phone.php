@@ -2,16 +2,16 @@
 /**
  * Telefon numarası yardımcıları.
  *
- * Standart kayıt biçimi: 0 + 10 haneli ulusal numara, boşluksuz (ör. 05372212323).
- * Kabul edilen giriş örnekleri (hepsi 05372212323 olur):
- *   +905372212323 · +90 (537) 221 23 23 · 0090 537 221 23 23 · 905372212323
- *   05372212323 · 0 537 221 23 23 · 5372212323 · +90 0537 221 23 23
+ * Standart kayıt biçimi: 0 + 10 haneli ulusal numara, boşluksuz (ör. 05001234567).
+ * Kabul edilen giriş örnekleri (hepsi 05001234567 olur):
+ *   +905001234567 · +90 (500) 123 45 67 · 0090 500 123 45 67 · 905001234567
+ *   05001234567 · 0 500 123 45 67 · 5001234567 · +90 0500 123 45 67
  *
  * Aynı kurallar tarayıcıda assets/js/app.js içindeki normalizePhone ile uygulanır;
  * değiştirirseniz ikisini birlikte güncelleyin.
  */
 
-const PHONE_FORMAT_HINT = 'Telefon numarası 10 haneli olmalı; ör. 0537 221 23 23 ya da +90 537 221 23 23.';
+const PHONE_FORMAT_HINT = 'Telefon numarası 10 haneli olmalı; ör. 0500 123 45 67 ya da +90 500 123 45 67.';
 
 /**
  * Numarayı standart biçime çevirir. Geçersizse null döner.
@@ -64,7 +64,7 @@ function phoneSearchDigits($term) {
 }
 
 /**
- * Okunaklı gösterim: 0537 221 23 23 (geçersizse olduğu gibi döner).
+ * Okunaklı gösterim: 0500 123 45 67 (geçersizse olduğu gibi döner).
  */
 function formatPhoneDisplay($phone) {
     $normalized = normalizePhone($phone);
