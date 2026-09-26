@@ -2,13 +2,29 @@
 
 PHP tabanlı profesyonel randevu yönetim sistemi. Psikolog, doktor ve benzeri meslek grupları için geliştirilmiş kapsamlı bir yönetim platformu.
 
+## Ekran Görüntüleri
+
+> Görüntüler sentetik geliştirme verisiyle (`dev/seed.php`) alınmıştır; gerçek danışan bilgisi içermez.
+
+**Telefon: Bugün, Takvim, Kasa ve Danışan kartı**
+
+![Telefon ekranları: Bugün ekranında sıradaki seans ve günün programı, aylık takvim, Kasa'da ödeme bekleyenler ve danışan kartı](docs/ekran-goruntuleri/telefon-ekranlari.png)
+
+**Alttan açılan paneller ve koyu tema: Ödeme al, yeni danışanla randevu, Bugün (koyu)**
+
+![Ödeme alma paneli, randevu ekranından yeni danışan ekleme ve koyu temada Bugün ekranı](docs/ekran-goruntuleri/paneller-ve-koyu-tema.png)
+
+**Masaüstü: Bugün**
+
+![Masaüstünde Bugün ekranı: yan ray, sıradaki seans, ödeme bekleyenler ve saat ekseninde günün programı](docs/ekran-goruntuleri/bugun-masaustu.png)
+
 ## Özellikler
 
 - 📅 **Randevu Yönetimi**: Kolay randevu oluşturma, düzenleme ve takip; telefonda da çalışan aylık takvim
 - ☀️ **Bugün Ekranı**: Sıradaki seans, canlı seans halkası, saat ekseninde günün programı ve ödeme bekleyen seanslar
 - 📱 **SMS Entegrasyonu**: NetGSM üzerinden randevu oluşturma ve hatırlatma SMS'leri
 - 👥 **Danışan Yönetimi**: Kapsamlı müşteri profili ve geçmiş takibi; randevu ekranından yeni danışan ekleme
-- ☎️ **Tek Telefon Biçimi**: `+90 (537) 221 23 23`, `05372212323`, `5372212323` gibi tüm girişler `05372212323` olarak kaydedilir
+- ☎️ **Tek Telefon Biçimi**: `+90 (500) 123 45 67`, `05001234567`, `5001234567` gibi tüm girişler `05001234567` olarak kaydedilir
 - 💰 **Ödeme Takibi**: Gelir ve gider yönetimi, tek dokunuşla ödeme alma
 - ⚙️ **Seans Ayarları**: Varsayılan seans ücreti ve süresi yönetim panelinden
 - 📊 **Raporlama**: Detaylı istatistik ve analiz raporları

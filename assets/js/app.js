@@ -296,17 +296,17 @@
     }
 
     /* ---------------------------------------------------------------
-       Telefon: nasıl yazılırsa yazılsın tek biçime (05372212323)
+       Telefon: nasıl yazılırsa yazılsın tek biçime (05001234567)
        Sunucudaki includes/phone.php ile aynı kurallar.
        --------------------------------------------------------------- */
-    const PHONE_HINT = 'Telefon numarası 10 haneli olmalı; ör. 0537 221 23 23 ya da +90 537 221 23 23.';
+    const PHONE_HINT = 'Telefon numarası 10 haneli olmalı; ör. 0500 123 45 67 ya da +90 500 123 45 67.';
 
     window.normalizePhone = function (raw) {
         let d = String(raw == null ? '' : raw).replace(/\D+/g, '');
         if (!d) return null;
         if (d.startsWith('00')) d = d.slice(2);                       // 0090...
         if (d.length >= 12 && d.startsWith('90')) d = d.slice(2);     // +90 ...
-        if (d.length === 11 && d[0] === '0') d = d.slice(1);          // 0537...
+        if (d.length === 11 && d[0] === '0') d = d.slice(1);          // 0500...
         return /^[2-58]\d{9}$/.test(d) ? '0' + d : null;
     };
 

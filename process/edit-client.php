@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     if (empty($phone)) {
         $errors[] = "Telefon alanı boş bırakılamaz.";
     } else {
-        // Telefonu tek biçime çevir (ör. +90 537 221 23 23 → 05372212323)
+        // Telefonu tek biçime çevir (ör. +90 500 123 45 67 → 05001234567)
         $normalizedPhone = normalizePhone($phone);
         if ($normalizedPhone === null) {
             $errors[] = PHONE_FORMAT_HINT;

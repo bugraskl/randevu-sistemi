@@ -429,9 +429,9 @@ include 'includes/header.php';
                                 </div>
                                 <div class="field mb-0">
                                     <label for="newClientPhone" class="form-label">Telefon</label>
-                                    <input type="tel" class="form-control tnum" id="newClientPhone" name="new_client_phone" inputmode="tel" autocomplete="off" placeholder="0537 221 23 23" data-phone required disabled>
+                                    <input type="tel" class="form-control tnum" id="newClientPhone" name="new_client_phone" inputmode="tel" autocomplete="off" placeholder="0500 123 45 67" data-phone required disabled>
                                     <div class="invalid-feedback">Telefon numarasını girin.</div>
-                                    <div class="form-text">Nasıl yazarsanız yazın 05372212323 biçiminde kaydedilir. Numara zaten kayıtlıysa randevu o danışana eklenir.</div>
+                                    <div class="form-text">Nasıl yazarsanız yazın 05001234567 biçiminde kaydedilir. Numara zaten kayıtlıysa randevu o danışana eklenir.</div>
                                 </div>
                             </div>
                         </fieldset>
