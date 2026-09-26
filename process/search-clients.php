@@ -27,7 +27,7 @@ try {
     $where = "name LIKE ? OR phone LIKE ? OR email LIKE ? OR address LIKE ?";
     $params = [$searchTerm, $searchTerm, $searchTerm, $searchTerm];
 
-    // Telefon hangi biçimde yazılırsa yazılsın (537 221, +90 537..., 0537...) kayıtlı numarayla eşleşsin
+    // Telefon hangi biçimde yazılırsa yazılsın (500 123, +90 500..., 0500...) kayıtlı numarayla eşleşsin
     $phoneDigits = phoneSearchDigits($term);
     if ($phoneDigits !== null) {
         $where .= " OR phone LIKE ?";

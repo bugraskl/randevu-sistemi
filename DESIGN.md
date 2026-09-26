@@ -324,11 +324,11 @@ Session states:
 - **ödenmedi ("Ödenmedi"):** a 12px hollow madder ring, text in madder.
 - **iptal ("İptal edildi"):** struck-through ink-3 text with no shape.
 - **Seansta ("Seansta · 15:50’e kadar"):** a solid plum dot, text in plum ink. Only the in-progress session on Bugün gets it.
-- **Upcoming:** no mark. The meta line shows the formatted phone ("0537 221 23 23"). On client-details the history row reads the plain word "Planlandı", with no shape.
+- **Upcoming:** no mark. The meta line shows the formatted phone ("0500 123 45 67"). On client-details the history row reads the plain word "Planlandı", with no shape.
 
 Non-appointment on/off states reuse the two neutral shapes: a solid plum dot for on ("Aktif" in user management, "Etkin" for recurring expenses, "Yanıtınız alındı" on the public confirmation page) and a hollow ink-3 ring for off ("Pasif", "Durduruldu").
 
-**The Four Session States Rule.** Appointments have no confirmation step, so a session carries exactly four states: ödendi (brass seal), ödenmedi (madder ring), iptal (strike-through) and "Seansta" (plum dot, the in-progress session only). A future session shows no mark; its meta line is the formatted phone number (e.g. "0537 221 23 23"). The hollow ring and plum dot also serve non-appointment on/off states (Aktif/Pasif, Etkin/Durduruldu), and are never used for a confirmation state.
+**The Four Session States Rule.** Appointments have no confirmation step, so a session carries exactly four states: ödendi (brass seal), ödenmedi (madder ring), iptal (strike-through) and "Seansta" (plum dot, the in-progress session only). A future session shows no mark; its meta line is the formatted phone number (e.g. "0500 123 45 67"). The hollow ring and plum dot also serve non-appointment on/off states (Aktif/Pasif, Etkin/Durduruldu), and are never used for a confirmation state.
 
 ### Now panel and session ring (signature)
 The Bugün now panel is a wool region: app-bar title, display-size next time, client name, and a brass-on-wool countdown line ("1 saat 41 dakika sonra başlıyor"). The on-wool actions "Ara" and "Danışan kartı" sit below. A day summary ("7 seans bugün · 2 tamamlandı · 5 kaldı") sits above a wool hairline. To the right, a 104px ring (128px on desktop) has a 6px faint track, 2px tick marks and a brass-on-wool stroke. The stroke fills live toward the start time, or through the running session, and animates stroke-dashoffset over 900ms.
