@@ -4,8 +4,8 @@
     "description": "Randevu Yönetim Sistemi",
     "start_url": "/",
     "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#212529",
+    "background_color": "#EDEBEA",
+    "theme_color": "#4B1D35",
     "orientation": "portrait",
     "icons": [
         {

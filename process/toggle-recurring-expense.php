@@ -2,6 +2,12 @@
 session_start();
 require_once __DIR__ . '/../config/database.php';
 
+// Yalnızca giriş yapmış kullanıcılar
+if (!isset($_SESSION['user_id'])) {
+    header('Location: ../index');
+    exit();
+}
+
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: ../expenses');
     exit();

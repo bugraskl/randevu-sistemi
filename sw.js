@@ -1,4 +1,4 @@
-const CACHE_NAME = 'randevu-yonetim-sistemi-v1';
+const CACHE_NAME = 'randevu-yonetim-sistemi-v3';
 const urlsToCache = [
     '/',
     '/index',
@@ -7,7 +7,7 @@ const urlsToCache = [
     '/appointments',
     '/payments',
     '/client-details',
-    '/assets/css/style.css?v=9',
+    '/assets/css/style.css?v=2.0.1',
     '/manifest.json',
     '/browserconfig.xml'
 ];

@@ -169,259 +169,325 @@ usort($display_expenses, function($a, $b) {
     return ($dateA > $dateB) ? -1 : 1; // DESC
 });
 
+// ---------------------------------------------------------------------------
+// Görünüm yardımcıları (yalnızca biçimlendirme; sorgulara dokunmaz)
+// ---------------------------------------------------------------------------
+$trMonths = [1 => 'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+$methodNames = ['cash' => 'Nakit', 'card' => 'Kart', 'bank_transfer' => 'Havale/EFT', 'other' => 'Diğer'];
+$methodIcons = ['cash' => 'bi-cash-stack', 'card' => 'bi-credit-card', 'bank_transfer' => 'bi-bank', 'other' => 'bi-three-dots'];
+$intervalNames = ['weekly' => 'Haftalık', 'monthly' => 'Aylık', 'quarterly' => '3 aylık', 'yearly' => 'Yıllık'];
+$intervalPer = ['weekly' => 'her hafta', 'monthly' => 'her ay', 'quarterly' => '3 ayda bir', 'yearly' => 'her yıl'];
+
+function money($amount) {
+    $amount = (float) $amount;
+    return '₺' . number_format($amount, (floor($amount) == $amount) ? 0 : 2, ',', '.');
+}
+
+function trDateMid($dateStr, $trMonths) {
+    $ts = strtotime((string) $dateStr);
+    if (!$ts) return '';
+    return date('j', $ts) . ' ' . $trMonths[(int) date('n', $ts)] . ' ' . date('Y', $ts);
+}
+
+// Ödeme yöntemi radyo kartları (değerler: cash, card, bank_transfer, other)
+function methodChoice($prefix, $current, $methodNames, $methodIcons) {
+    if (!isset($methodNames[$current])) {
+        $current = 'cash';
+    }
+    $html = '<div class="choice choice-4">';
+    $first = true;
+    foreach ($methodNames as $value => $label) {
+        $id = $prefix . '_' . $value;
+        $html .= '<input type="radio" name="payment_method" id="' . htmlspecialchars($id) . '" value="' . $value . '"'
+            . ($current === $value ? ' checked' : '') . ($first ? ' required' : '') . '>';
+        $html .= '<label for="' . htmlspecialchars($id) . '"><i class="bi ' . $methodIcons[$value] . '" aria-hidden="true"></i>' . $label . '</label>';
+        $first = false;
+    }
+    return $html . '</div>';
+}
+
+// Seçili dönemin adı
+$isYear = strlen($selected_period) === 4;
+$periodTs = strtotime($first_day);
+if ($isYear) {
+    $periodLabel = $selected_period . ' yılı';
+    $periodShort = $selected_period;
+} else {
+    $periodLabel = $trMonths[(int) date('n', $periodTs)] . ' ' . date('Y', $periodTs);
+    $periodShort = $trMonths[(int) date('n', $periodTs)];
+}
+
+// Dönem seçenekleri: bu ay, son 12 ay, son 3 yıl
+$periodOptions = [];
+$periodOptions[] = [date('Y-m'), 'Bu ay'];
+$optBase = new DateTime();
+$optBase->setDate((int) $optBase->format('Y'), (int) $optBase->format('n'), 1);
+for ($i = 1; $i <= 12; $i++) {
+    $optDate = clone $optBase;
+    $optDate->modify("-$i months");
+    $periodOptions[] = [$optDate->format('Y-m'), $trMonths[(int) $optDate->format('n')] . ' ' . $optDate->format('Y')];
+}
+for ($i = 0; $i < 3; $i++) {
+    $optYear = (string) ((int) date('Y') - $i);
+    $periodOptions[] = [$optYear, $optYear . ' yılı'];
+}
+if (!in_array($selected_period, array_column($periodOptions, 0), true) && preg_match('/^\d{4}(-\d{2})?$/', $selected_period)) {
+    array_unshift($periodOptions, [$selected_period, $periodLabel]);
+}
+
+// "Diğer" yöntemle ödenenler (toplamdan nakit ve kart çıkınca kalan)
+$other_total = round($total_expense - $cash_total - $card_total, 2);
+
+$recurringById = [];
+foreach ($recurrings as $r) {
+    $recurringById[(int) $r['id']] = $r;
+}
+$entryCount = $total_rows + count($recurring_expense_rows);
+
+$pageUrl = function ($n) use ($selected_period) {
+    return '?sayfa=' . (int) $n . '&period=' . urlencode($selected_period);
+};
+
+$pageTitle = 'Kasa';
+$pageSubtitle = $periodLabel;
+$pageActions = '<button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addExpenseModal"><i class="bi bi-plus-lg" aria-hidden="true"></i> Gider ekle</button>';
+
 include 'includes/header.php';
 ?>
-
-<body class="<?php echo $themeClass; ?>">
+<body class="<?php echo $themeClass; ?>" data-page="expenses">
     <div class="wrapper">
         <?php include 'includes/sidebar.php'; ?>
 
-        <div id="content">
-            <nav class="navbar navbar-expand-lg navbar-light bg-light">
-                <div class="container-fluid">
-                    <button type="button" id="sidebarCollapse" class="btn btn-secondary">
-                        <i class="bi bi-list"></i>
-                    </button>
-                    <div class="ms-auto">
-                        <button type="button" id="themeToggle" class="btn btn-outline-secondary me-2">
-                            <i class="bi bi-moon-fill"></i>
-                        </button>
-                        <a href="auth/logout" class="btn btn-outline-danger">
-                            <i class="bi bi-box-arrow-right"></i> Çıkış Yap
-                        </a>
-                    </div>
-                </div>
-            </nav>
+        <main id="content" tabindex="-1">
+            <?php include 'includes/topbar.php'; ?>
 
-            <div class="container-fluid p-4">
-                <div class="row">
-                    <div class="col-12">
-                        <div class="card">
-                            <div class="card-body">
-                                <form method="GET" class="row g-3 align-items-end" id="periodFilterForm">
-                                    <div class="col-md-12">
-                                        <label for="period" class="form-label">Dönem Seçin</label>
-                                        <select class="form-select" name="period" id="period" onchange="document.getElementById('periodFilterForm').submit();">
-                                            <option value="<?php echo date('Y-m'); ?>" <?php echo $selected_period === date('Y-m') ? 'selected' : ''; ?>>Bu Ay</option>
-                                            <?php
-                                            $current_date = new DateTime();
-                                            $current_date->setDate($current_date->format('Y'), $current_date->format('n'), 1);
-                                            for ($i = 1; $i <= 12; $i++) {
-                                                $date = clone $current_date;
-                                                $date->modify("-$i months");
-                                                $month = $date->format('Y-m');
-                                                $monthName = $date->format('F Y');
-                                                $tr = ['January'=>'Ocak','February'=>'Şubat','March'=>'Mart','April'=>'Nisan','May'=>'Mayıs','June'=>'Haziran','July'=>'Temmuz','August'=>'Ağustos','September'=>'Eylül','October'=>'Ekim','November'=>'Kasım','December'=>'Aralık'];
-                                                $monthName = str_replace(array_keys($tr), array_values($tr), $monthName);
-                                                echo '<option value="' . $month . '"' . ($selected_period === $month ? ' selected' : '') . '>' . $monthName . '</option>';
-                                            }
-                                            for ($i = 0; $i < 3; $i++) {
-                                                $year = date('Y') - $i;
-                                                echo '<option value="' . $year . '"' . ($selected_period === $year ? ' selected' : '') . '>' . $year . ' Yılı</option>';
-                                            }
-                                            ?>
-                                        </select>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
+            <div class="page">
+                <nav class="seg seg-block" aria-label="Kasa">
+                    <a class="seg-btn" href="payments">Ödemeler</a>
+                    <a class="seg-btn active" aria-current="page" href="expenses">Giderler</a>
+                </nav>
+
+                <!-- Dönem seçimi -->
+                <form method="GET" class="kasa-period" id="periodFilterForm">
+                    <label for="period" class="form-label">Dönem</label>
+                    <select class="form-select" name="period" id="period" onchange="document.getElementById('periodFilterForm').submit();">
+                        <?php foreach ($periodOptions as $opt): ?>
+                        <option value="<?php echo htmlspecialchars($opt[0]); ?>"<?php echo $selected_period === $opt[0] ? ' selected' : ''; ?>><?php echo htmlspecialchars($opt[1]); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <noscript><button type="submit" class="btn btn-secondary btn-sm">Göster</button></noscript>
+                </form>
+
+                <!-- Dönem özeti (düzenli giderler dahil) -->
+                <div class="ledger" aria-label="<?php echo htmlspecialchars($periodLabel); ?> gider özeti">
+                    <div class="ledger-item is-lead">
+                        <span class="ledger-label"><?php echo htmlspecialchars($periodShort); ?> toplamı</span>
+                        <span class="ledger-value"><?php echo money($total_expense); ?></span>
                     </div>
+                    <div class="ledger-item">
+                        <span class="ledger-label">Nakit + Havale/EFT</span>
+                        <span class="ledger-value"><?php echo money($cash_total); ?></span>
+                    </div>
+                    <div class="ledger-item">
+                        <span class="ledger-label">Kart</span>
+                        <span class="ledger-value"><?php echo money($card_total); ?></span>
+                    </div>
+                    <?php if (abs($other_total) >= 0.01): ?>
+                    <div class="ledger-item">
+                        <span class="ledger-label">Diğer</span>
+                        <span class="ledger-value"><?php echo money($other_total); ?></span>
+                    </div>
+                    <?php endif; ?>
                 </div>
 
-                <div class="row">
-                    <div class="col-md-4">
-                        <div class="stats-card d-flex align-items-center">
-                            <div class="stats-info flex-grow-1">
-                                <div class="number"><?php echo number_format($total_expense, 2, ',', '.'); ?> ₺</div>
-                                <div class="label"><?php echo (strlen($selected_period)===4? $selected_period.' Yılı Toplam Gider' : str_replace(['January','February','March','April','May','June','July','August','September','October','November','December'], ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'], date('F Y', strtotime($selected_period))) . ' Toplam Gider'); ?></div>
-                            </div>
-                            <div class="icon text-danger ms-3"><i class="bi bi-receipt"></i></div>
-                        </div>
+                <!-- Gider kayıtları -->
+                <section class="section" aria-labelledby="expensesTitle">
+                    <div class="section-head">
+                        <h2 class="section-title" id="expensesTitle">Gider kayıtları</h2>
+                        <?php if ($entryCount > 0): ?>
+                        <span class="section-note"><?php echo $entryCount; ?> kayıt</span>
+                        <?php endif; ?>
                     </div>
-                    <div class="col-md-4">
-                        <div class="stats-card d-flex align-items-center">
-                            <div class="stats-info flex-grow-1">
-                                <div class="number"><?php echo number_format($cash_total, 2, ',', '.'); ?> ₺</div>
-                                <div class="label"><?php echo (strlen($selected_period)===4? $selected_period.' Yılı Nakit+Havale/EFT' : str_replace(['January','February','March','April','May','June','July','August','September','October','November','December'], ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'], date('F Y', strtotime($selected_period))) . ' Nakit+Havale/EFT'); ?></div>
-                            </div>
-                            <div class="icon text-primary ms-3"><i class="bi bi-cash"></i></div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="stats-card d-flex align-items-center">
-                            <div class="stats-info flex-grow-1">
-                                <div class="number"><?php echo number_format($card_total, 2, ',', '.'); ?> ₺</div>
-                                <div class="label"><?php echo (strlen($selected_period)===4? $selected_period.' Yılı Kart ile' : str_replace(['January','February','March','April','May','June','July','August','September','October','November','December'], ['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'], date('F Y', strtotime($selected_period))) . ' Kart ile'); ?></div>
-                            </div>
-                            <div class="icon text-info ms-3"><i class="bi bi-credit-card"></i></div>
-                        </div>
-                    </div>
-                </div>
 
-                <div class="card">
-                    <div class="card-header">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0">Giderler</h5>
-                            <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#recurringModal">
-                                    <i class="bi bi-arrow-repeat"></i> Tekrarlayan Gider
-                                </button>
-                                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addExpenseModal">
-                                    <i class="bi bi-plus-circle"></i> Yeni Gider
-                                </button>
+                    <?php if (empty($display_expenses)): ?>
+                    <div class="empty">
+                        <p class="empty-title"><?php echo htmlspecialchars($periodLabel); ?> için gider yok</p>
+                        <p>Üstteki “Gider ekle” ile ilk gideri kaydedin. Kira gibi her dönem tekrarlanan giderleri aşağıdaki “Düzenli gider ekle” ile bir kez tanımlamanız yeterli.</p>
+                        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addExpenseModal">Gider ekle</button>
+                    </div>
+                    <?php else: ?>
+                    <div class="list">
+                        <?php foreach ($display_expenses as $exp):
+                            $isRecurring = isset($exp['__type']) && $exp['__type'] === 'recurring';
+                            $ts = strtotime($exp['expense_date']);
+                            $metaParts = [];
+                            if (!empty($exp['category'])) {
+                                $metaParts[] = htmlspecialchars($exp['category']);
+                            }
+                            if ($isRecurring) {
+                                $series = $recurringById[$exp['recurring_id']] ?? null;
+                                $metaParts[] = 'Düzenli' . ($series && isset($intervalNames[$series['recurrence_interval']]) ? ' · ' . mb_strtolower($intervalNames[$series['recurrence_interval']], 'UTF-8') : '');
+                            }
+                            $method = $methodNames[$exp['payment_method']] ?? (string) $exp['payment_method'];
+                        ?>
+                        <div class="row-item">
+                            <span class="row-time"><?php echo date('j', $ts); ?><small><?php echo mb_substr($trMonths[(int) date('n', $ts)], 0, 3); ?></small></span>
+                            <div class="row-main">
+                                <p class="row-title"><span><?php echo htmlspecialchars($exp['title']); ?></span></p>
+                                <?php if (!empty($metaParts)): ?>
+                                <p class="row-meta"><?php echo implode(' · ', $metaParts); ?></p>
+                                <?php endif; ?>
+                            </div>
+                            <div class="row-trail"><span class="row-amount"><?php echo money($exp['amount']); ?><small><?php echo htmlspecialchars($method); ?></small></span></div>
+                            <div class="row-actions">
+                                <?php if ($isRecurring): ?>
+                                <button type="button" class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#editRecurringModal<?php echo (int) $exp['recurring_id']; ?>">Düzenle</button>
+                                <?php else: ?>
+                                <button type="button" class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#editExpenseModal<?php echo (int) $exp['id']; ?>">Düzenle</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteExpenseModal<?php echo (int) $exp['id']; ?>">Sil</button>
+                                <?php endif; ?>
                             </div>
                         </div>
+                        <?php endforeach; ?>
                     </div>
-                    <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Tarih</th>
-                                        <th>Başlık</th>
-                                        <th>Kategori</th>
-                                        <th>Ödeme Yöntemi</th>
-                                        <th>Tutar</th>
-                                        <th>İşlemler</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if (empty($display_expenses)): ?>
-                                    <tr>
-                                        <td colspan="6" class="text-center py-4">
-                                            <div class="d-flex flex-column align-items-center">
-                                                <i class="bi bi-inbox fs-1 text-muted mb-2"></i>
-                                                <p class="text-muted mb-0">Kayıt bulunamadı.</p>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    <?php else: ?>
-                                    <?php foreach ($display_expenses as $exp): ?>
-                                    <tr>
-                                        <td><?php echo date('d.m.Y', strtotime($exp['expense_date'])); ?></td>
-                                        <td>
-                                            <?php echo htmlspecialchars($exp['title']); ?>
-                                            <?php if (isset($exp['__type']) && $exp['__type'] === 'recurring'): ?>
-                                                <i class="bi bi-arrow-repeat text-muted ms-1" title="Tekrarlayan"></i>
-                                            <?php endif; ?>
-                                        </td>
-                                        <td><?php echo htmlspecialchars($exp['category'] ?? '-'); ?></td>
-                                        <td><?php 
-                                            $methods = ['cash'=>'Nakit','card'=>'Kredi Kartı','bank_transfer'=>'Havale/EFT','other'=>'Diğer'];
-                                            echo $methods[$exp['payment_method']] ?? $exp['payment_method'];
-                                        ?></td>
-                                        <td><?php echo number_format($exp['amount'], 2, ',', '.'); ?> ₺</td>
-                                        <td>
-                                            <div class="btn-group" role="group">
-                                                <?php if (isset($exp['__type']) && $exp['__type'] === 'recurring'): ?>
-                                                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editRecurringModal<?php echo $exp['recurring_id']; ?>">
-                                                        <i class="bi bi-pencil"></i>
-                                                    </button>
-                                                    <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteRecurringModal<?php echo $exp['recurring_id']; ?>">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
-                                                <?php else: ?>
-                                                    <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editExpenseModal<?php echo $exp['id']; ?>">
-                                                        <i class="bi bi-pencil"></i>
-                                                    </button>
-                                                    <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteExpenseModal<?php echo $exp['id']; ?>">
-                                                        <i class="bi bi-trash"></i>
-                                                    </button>
-                                                <?php endif; ?>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
+                    <?php endif; ?>
 
-                            <?php if ($total_pages > 1): ?>
-                            <nav aria-label="Sayfalama" class="mt-4">
-                                <ul class="pagination justify-content-center">
-                                    <?php if ($sayfa > 1): ?>
-                                    <li class="page-item">
-                                        <a class="page-link" href="?sayfa=<?php echo $sayfa - 1; ?>&period=<?php echo $selected_period; ?>" aria-label="Önceki">
-                                            <span aria-hidden="true">&laquo;</span>
-                                        </a>
-                                    </li>
-                                    <?php endif; ?>
-                                    <?php
-                                    $start_page = max(1, $sayfa - 2);
-                                    $end_page = min($total_pages, $sayfa + 2);
-                                    if ($start_page > 1) {
-                                        echo '<li class="page-item"><a class="page-link" href="?sayfa=1&period=' . $selected_period . '">1</a></li>';
-                                        if ($start_page > 2) echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                                    }
-                                    for ($i = $start_page; $i <= $end_page; $i++) {
-                                        echo '<li class="page-item ' . ($i == $sayfa ? 'active' : '') . '">';
-                                        echo '<a class="page-link" href="?sayfa=' . $i . '&period=' . $selected_period . '">' . $i . '</a>';
-                                        echo '</li>';
-                                    }
-                                    if ($end_page < $total_pages) {
-                                        if ($end_page < $total_pages - 1) echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                                        echo '<li class="page-item"><a class="page-link" href="?sayfa=' . $total_pages . '&period=' . $selected_period . '">' . $total_pages . '</a></li>';
-                                    }
-                                    ?>
-                                    <?php if ($sayfa < $total_pages): ?>
-                                    <li class="page-item">
-                                        <a class="page-link" href="?sayfa=<?php echo $sayfa + 1; ?>&period=<?php echo $selected_period; ?>" aria-label="Sonraki">
-                                            <span aria-hidden="true">&raquo;</span>
-                                        </a>
-                                    </li>
-                                    <?php endif; ?>
-                                </ul>
-                            </nav>
+                    <?php if ($total_pages > 1): ?>
+                    <nav aria-label="Sayfalama" class="mt-4">
+                        <ul class="pagination justify-content-center">
+                            <?php if ($sayfa > 1): ?>
+                            <li class="page-item">
+                                <a class="page-link" href="<?php echo htmlspecialchars($pageUrl($sayfa - 1)); ?>" aria-label="Önceki">
+                                    <span aria-hidden="true">&laquo;</span>
+                                </a>
+                            </li>
                             <?php endif; ?>
-                        </div>
+                            <?php
+                            $start_page = max(1, $sayfa - 2);
+                            $end_page = min($total_pages, $sayfa + 2);
+                            if ($start_page > 1) {
+                                echo '<li class="page-item"><a class="page-link" href="' . htmlspecialchars($pageUrl(1)) . '">1</a></li>';
+                                if ($start_page > 2) echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                            }
+                            for ($i = $start_page; $i <= $end_page; $i++) {
+                                echo '<li class="page-item ' . ($i == $sayfa ? 'active' : '') . '"' . ($i == $sayfa ? ' aria-current="page"' : '') . '>';
+                                echo '<a class="page-link" href="' . htmlspecialchars($pageUrl($i)) . '">' . $i . '</a>';
+                                echo '</li>';
+                            }
+                            if ($end_page < $total_pages) {
+                                if ($end_page < $total_pages - 1) echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
+                                echo '<li class="page-item"><a class="page-link" href="' . htmlspecialchars($pageUrl($total_pages)) . '">' . $total_pages . '</a></li>';
+                            }
+                            ?>
+                            <?php if ($sayfa < $total_pages): ?>
+                            <li class="page-item">
+                                <a class="page-link" href="<?php echo htmlspecialchars($pageUrl($sayfa + 1)); ?>" aria-label="Sonraki">
+                                    <span aria-hidden="true">&raquo;</span>
+                                </a>
+                            </li>
+                            <?php endif; ?>
+                        </ul>
+                    </nav>
+                    <?php endif; ?>
+                </section>
+
+                <!-- Düzenli giderler -->
+                <section class="section" aria-labelledby="recurringTitle">
+                    <div class="section-head">
+                        <h2 class="section-title" id="recurringTitle">Düzenli giderler</h2>
+                        <?php if (!empty($recurrings)): ?>
+                        <button type="button" class="btn btn-quiet btn-sm" data-bs-toggle="modal" data-bs-target="#recurringModal">Düzenli gider ekle</button>
+                        <?php endif; ?>
                     </div>
-                </div>
+
+                    <?php if (empty($recurrings)): ?>
+                    <div class="empty">
+                        <p class="empty-title">Düzenli gider yok</p>
+                        <p>Kira, aidat, abonelik gibi tekrarlanan giderleri bir kez tanımlayın; her dönemin listesine ve toplamına kendiliğinden eklenir.</p>
+                        <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#recurringModal">Düzenli gider ekle</button>
+                    </div>
+                    <?php else: ?>
+                    <div class="list">
+                        <?php foreach ($recurrings as $r):
+                            $rid = (int) $r['id'];
+                            $metaParts = [];
+                            $metaParts[] = $r['active']
+                                ? '<span class="mark mark-confirmed">Etkin</span>'
+                                : '<span class="mark mark-pending">Durduruldu</span>';
+                            $metaParts[] = htmlspecialchars($methodNames[$r['payment_method']] ?? (string) $r['payment_method']);
+                            if (!empty($r['category'])) {
+                                $metaParts[] = htmlspecialchars($r['category']);
+                            }
+                            if (!empty($r['end_date'])) {
+                                $metaParts[] = 'Bitiş: ' . htmlspecialchars(trDateMid($r['end_date'], $trMonths));
+                            }
+                        ?>
+                        <div class="row-item no-lead">
+                            <div class="row-main">
+                                <p class="row-title"><span><?php echo htmlspecialchars($r['title']); ?></span></p>
+                                <p class="row-meta"><?php echo implode(' · ', $metaParts); ?></p>
+                            </div>
+                            <div class="row-trail"><span class="row-amount"><?php echo money($r['amount']); ?><small><?php echo htmlspecialchars($intervalPer[$r['recurrence_interval']] ?? (string) $r['recurrence_interval']); ?></small></span></div>
+                            <div class="row-actions">
+                                <button type="button" class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#editRecurringModal<?php echo $rid; ?>">Düzenle</button>
+                                <button type="button" class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#toggleRecurringModal<?php echo $rid; ?>"><?php echo $r['active'] ? 'Durdur' : 'Yeniden başlat'; ?></button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteRecurringModal<?php echo $rid; ?>">Sil</button>
+                            </div>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+                </section>
             </div>
-        </div>
+        </main>
     </div>
 
-    <?php foreach ($expenses as $exp): ?>
-    <div class="modal fade" id="editExpenseModal<?php echo $exp['id']; ?>" tabindex="-1">
+    <?php foreach ($expenses as $exp):
+        $eid = (int) $exp['id'];
+        $ets = strtotime($exp['expense_date']);
+    ?>
+    <!-- Gideri düzenle -->
+    <div class="modal fade" id="editExpenseModal<?php echo $eid; ?>" tabindex="-1" aria-labelledby="editExpenseTitle<?php echo $eid; ?>" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Gider Düzenle</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h2 class="modal-title" id="editExpenseTitle<?php echo $eid; ?>">Gideri düzenle</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
                 </div>
                 <div class="modal-body">
                     <form action="process/edit-expense" method="POST" class="needs-validation" novalidate>
-                        <input type="hidden" name="id" value="<?php echo $exp['id']; ?>">
-                        <div class="mb-3">
-                            <label class="form-label">Başlık</label>
-                            <input type="text" class="form-control" name="title" value="<?php echo htmlspecialchars($exp['title']); ?>" required>
+                        <input type="hidden" name="id" value="<?php echo $eid; ?>">
+                        <div class="field">
+                            <label for="expTitle<?php echo $eid; ?>" class="form-label">Başlık</label>
+                            <input type="text" class="form-control" id="expTitle<?php echo $eid; ?>" name="title" value="<?php echo htmlspecialchars($exp['title']); ?>" required>
+                            <div class="invalid-feedback">Başlık girin.</div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Kategori</label>
-                            <input type="text" class="form-control" name="category" value="<?php echo htmlspecialchars($exp['category'] ?? ''); ?>">
+                        <div class="field">
+                            <label for="expCategory<?php echo $eid; ?>" class="form-label">Kategori <span class="ink-3">(isteğe bağlı)</span></label>
+                            <input type="text" class="form-control" id="expCategory<?php echo $eid; ?>" name="category" value="<?php echo htmlspecialchars($exp['category'] ?? ''); ?>">
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Tutar</label>
-                            <input type="number" class="form-control" name="amount" step="0.01" value="<?php echo $exp['amount']; ?>" required>
+                        <div class="field-row field">
+                            <div>
+                                <label for="expAmount<?php echo $eid; ?>" class="form-label">Tutar (₺)</label>
+                                <input type="number" inputmode="decimal" class="form-control tnum" id="expAmount<?php echo $eid; ?>" name="amount" step="0.01" min="0" value="<?php echo htmlspecialchars((string) $exp['amount']); ?>" required>
+                                <div class="invalid-feedback">Tutarı girin.</div>
+                            </div>
+                            <div>
+                                <label for="expDate<?php echo $eid; ?>" class="form-label">Tarih</label>
+                                <input type="date" class="form-control" id="expDate<?php echo $eid; ?>" name="expense_date" value="<?php echo htmlspecialchars((string) $exp['expense_date']); ?>" required>
+                                <div class="invalid-feedback">Tarih seçin.</div>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Ödeme Yöntemi</label>
-                            <select class="form-select" name="payment_method" required>
-                                <option value="cash" <?php echo $exp['payment_method']=='cash'?'selected':''; ?>>Nakit</option>
-                                <option value="card" <?php echo $exp['payment_method']=='card'?'selected':''; ?>>Kredi Kartı</option>
-                                <option value="bank_transfer" <?php echo $exp['payment_method']=='bank_transfer'?'selected':''; ?>>Havale/EFT</option>
-                                <option value="other" <?php echo $exp['payment_method']=='other'?'selected':''; ?>>Diğer</option>
-                            </select>
+                        <fieldset class="field">
+                            <legend class="form-label">Ödeme yöntemi</legend>
+                            <?php echo methodChoice('expMethod' . $eid, $exp['payment_method'], $methodNames, $methodIcons); ?>
+                        </fieldset>
+                        <div class="field">
+                            <label for="expNotes<?php echo $eid; ?>" class="form-label">Not <span class="ink-3">(isteğe bağlı)</span></label>
+                            <textarea class="form-control" id="expNotes<?php echo $eid; ?>" name="notes" rows="2"><?php echo htmlspecialchars($exp['notes'] ?? ''); ?></textarea>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Tarih</label>
-                            <input type="date" class="form-control" name="expense_date" value="<?php echo $exp['expense_date']; ?>" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Notlar</label>
-                            <textarea class="form-control" name="notes" rows="3"><?php echo htmlspecialchars($exp['notes'] ?? ''); ?></textarea>
-                        </div>
-                        <div class="d-flex justify-content-end">
-                            <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">İptal</button>
+                        <div class="sheet-actions">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
                             <button type="submit" class="btn btn-primary">Kaydet</button>
                         </div>
                     </form>
@@ -430,22 +496,29 @@ include 'includes/header.php';
         </div>
     </div>
 
-    <div class="modal fade" id="deleteExpenseModal<?php echo $exp['id']; ?>" tabindex="-1">
+    <!-- Gideri sil -->
+    <div class="modal fade" id="deleteExpenseModal<?php echo $eid; ?>" tabindex="-1" aria-labelledby="deleteExpenseTitle<?php echo $eid; ?>" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Gider Sil</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h2 class="modal-title" id="deleteExpenseTitle<?php echo $eid; ?>">Gideri sil</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i><strong>Dikkat!</strong> Bu işlem geri alınamaz.</div>
-                    <p><strong><?php echo htmlspecialchars($exp['title']); ?></strong> giderini silmek istediğinizden emin misiniz?</p>
-                </div>
-                <div class="modal-footer">
-                    <form action="process/delete-expense" method="POST" class="d-inline">
-                        <input type="hidden" name="id" value="<?php echo $exp['id']; ?>">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
-                        <button type="submit" class="btn btn-danger">Sil</button>
+                    <div class="sheet-summary">
+                        <span class="row-time"><?php echo date('j', $ets); ?><small><?php echo mb_substr($trMonths[(int) date('n', $ets)], 0, 3); ?></small></span>
+                        <div>
+                            <p class="row-title"><span><?php echo htmlspecialchars($exp['title']); ?></span></p>
+                            <p class="row-meta"><?php echo money($exp['amount']); ?> · <?php echo htmlspecialchars($methodNames[$exp['payment_method']] ?? (string) $exp['payment_method']); ?></p>
+                        </div>
+                    </div>
+                    <p>Bu gider kaydı kalıcı olarak silinir ve dönem toplamından düşülür. Bu işlem geri alınamaz.</p>
+                    <form action="process/delete-expense" method="POST">
+                        <input type="hidden" name="id" value="<?php echo $eid; ?>">
+                        <div class="sheet-actions">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                            <button type="submit" class="btn btn-danger">Gideri sil</button>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -453,47 +526,48 @@ include 'includes/header.php';
     </div>
     <?php endforeach; ?>
 
-    <div class="modal fade" id="addExpenseModal" tabindex="-1">
+    <!-- Gider ekle -->
+    <div class="modal fade" id="addExpenseModal" tabindex="-1" aria-labelledby="addExpenseTitle" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Yeni Gider Ekle</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h2 class="modal-title" id="addExpenseTitle">Gider ekle</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
                 </div>
                 <div class="modal-body">
                     <form action="process/add-expense" method="POST" class="needs-validation" novalidate>
-                        <div class="mb-3">
-                            <label class="form-label">Başlık</label>
-                            <input type="text" class="form-control" name="title" required>
+                        <div class="field">
+                            <label for="addExpTitle" class="form-label">Başlık</label>
+                            <input type="text" class="form-control" id="addExpTitle" name="title" required>
+                            <div class="invalid-feedback">Başlık girin.</div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Kategori</label>
-                            <input type="text" class="form-control" name="category">
+                        <div class="field">
+                            <label for="addExpCategory" class="form-label">Kategori <span class="ink-3">(isteğe bağlı)</span></label>
+                            <input type="text" class="form-control" id="addExpCategory" name="category">
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Tutar</label>
-                            <input type="number" class="form-control" name="amount" step="0.01" required>
+                        <div class="field-row field">
+                            <div>
+                                <label for="addExpAmount" class="form-label">Tutar (₺)</label>
+                                <input type="number" inputmode="decimal" class="form-control tnum" id="addExpAmount" name="amount" step="0.01" min="0" required>
+                                <div class="invalid-feedback">Tutarı girin.</div>
+                            </div>
+                            <div>
+                                <label for="addExpDate" class="form-label">Tarih</label>
+                                <input type="date" class="form-control" id="addExpDate" name="expense_date" value="<?php echo date('Y-m-d'); ?>" required>
+                                <div class="invalid-feedback">Tarih seçin.</div>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Ödeme Yöntemi</label>
-                            <select class="form-select" name="payment_method" required>
-                                <option value="cash">Nakit</option>
-                                <option value="card">Kredi Kartı</option>
-                                <option value="bank_transfer">Havale/EFT</option>
-                                <option value="other">Diğer</option>
-                            </select>
+                        <fieldset class="field">
+                            <legend class="form-label">Ödeme yöntemi</legend>
+                            <?php echo methodChoice('addExpMethod', 'cash', $methodNames, $methodIcons); ?>
+                        </fieldset>
+                        <div class="field">
+                            <label for="addExpNotes" class="form-label">Not <span class="ink-3">(isteğe bağlı)</span></label>
+                            <textarea class="form-control" id="addExpNotes" name="notes" rows="2"></textarea>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Tarih</label>
-                            <input type="date" class="form-control" name="expense_date" value="<?php echo date('Y-m-d'); ?>" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Notlar</label>
-                            <textarea class="form-control" name="notes" rows="3"></textarea>
-                        </div>
-                        <div class="d-flex justify-content-end">
-                            <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">İptal</button>
-                            <button type="submit" class="btn btn-primary">Kaydet</button>
+                        <div class="sheet-actions">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                            <button type="submit" class="btn btn-primary">Gideri kaydet</button>
                         </div>
                     </form>
                 </div>
@@ -501,144 +575,134 @@ include 'includes/header.php';
         </div>
     </div>
 
-    <div class="modal fade" id="recurringModal" tabindex="-1">
+    <!-- Düzenli gider ekle -->
+    <div class="modal fade" id="recurringModal" tabindex="-1" aria-labelledby="recurringModalTitle" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Tekrarlayan Gider</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h2 class="modal-title" id="recurringModalTitle">Düzenli gider ekle</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
                 </div>
                 <div class="modal-body">
                     <form action="process/add-recurring-expense" method="POST" class="needs-validation" novalidate>
-                        <div class="mb-3">
-                            <label class="form-label">Başlık</label>
-                            <input type="text" class="form-control" name="title" required>
+                        <div class="field">
+                            <label for="addRecTitle" class="form-label">Başlık</label>
+                            <input type="text" class="form-control" id="addRecTitle" name="title" required>
+                            <div class="invalid-feedback">Başlık girin.</div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Kategori</label>
-                            <input type="text" class="form-control" name="category">
+                        <div class="field">
+                            <label for="addRecCategory" class="form-label">Kategori <span class="ink-3">(isteğe bağlı)</span></label>
+                            <input type="text" class="form-control" id="addRecCategory" name="category">
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Tutar</label>
-                            <input type="number" class="form-control" name="amount" step="0.01" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Ödeme Yöntemi</label>
-                            <select class="form-select" name="payment_method" required>
-                                <option value="cash">Nakit</option>
-                                <option value="card">Kredi Kartı</option>
-                                <option value="bank_transfer">Havale/EFT</option>
-                                <option value="other">Diğer</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Başlangıç Tarihi</label>
-                            <input type="date" class="form-control" name="start_date" value="<?php echo date('Y-m-d'); ?>" required>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Bitiş Tarihi (Opsiyonel)</label>
-                            <input type="date" class="form-control" name="end_date">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Tekrar</label>
-                            <select class="form-select" name="recurrence_interval" required>
-                                <option value="weekly">Haftalık</option>
-                                <option value="monthly" selected>Aylık</option>
-                                <option value="quarterly">3 Aylık</option>
-                                <option value="yearly">Yıllık</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Notlar</label>
-                            <textarea class="form-control" name="notes" rows="3"></textarea>
-                        </div>
-                        <div class="d-flex justify-content-end">
-                            <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">İptal</button>
-                            <button type="submit" class="btn btn-primary">Kaydet</button>
-                        </div>
-                    </form>
-                </div>
-                <?php if (!empty($recurrings)): ?>
-                <div class="border-top p-3">
-                    <h6 class="mb-3">Aktif Tekrarlayan Giderler</h6>
-                    <ul class="list-group">
-                        <?php foreach ($recurrings as $r): ?>
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <span>
-                                <strong><?php echo htmlspecialchars($r['title']); ?></strong>
-                                <small class="text-muted"> - <?php echo number_format($r['amount'], 2, ',', '.'); ?> ₺ / <?php echo $r['recurrence_interval']; ?></small>
-                            </span>
-                            <div class="btn-group">
-                                <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editRecurringModal<?php echo $r['id']; ?>"><i class="bi bi-pencil"></i></button>
-                                <form action="process/toggle-recurring-expense" method="POST" class="ms-2">
-                                    <input type="hidden" name="id" value="<?php echo $r['id']; ?>">
-                                    <button type="submit" class="btn btn-sm btn-outline-warning"><?php echo $r['active'] ? 'Pasifleştir' : 'Aktifleştir'; ?></button>
-                                </form>
+                        <div class="field-row field">
+                            <div>
+                                <label for="addRecAmount" class="form-label">Tutar (₺)</label>
+                                <input type="number" inputmode="decimal" class="form-control tnum" id="addRecAmount" name="amount" step="0.01" min="0" required>
+                                <div class="invalid-feedback">Tutarı girin.</div>
                             </div>
-                        </li>
-                        <?php endforeach; ?>
-                    </ul>
+                            <div>
+                                <label for="addRecInterval" class="form-label">Tekrar</label>
+                                <select class="form-select" id="addRecInterval" name="recurrence_interval" required>
+                                    <option value="weekly">Haftalık</option>
+                                    <option value="monthly" selected>Aylık</option>
+                                    <option value="quarterly">3 aylık</option>
+                                    <option value="yearly">Yıllık</option>
+                                </select>
+                            </div>
+                        </div>
+                        <fieldset class="field">
+                            <legend class="form-label">Ödeme yöntemi</legend>
+                            <?php echo methodChoice('addRecMethod', 'cash', $methodNames, $methodIcons); ?>
+                        </fieldset>
+                        <div class="field-row field">
+                            <div>
+                                <label for="addRecStart" class="form-label">Başlangıç</label>
+                                <input type="date" class="form-control" id="addRecStart" name="start_date" value="<?php echo date('Y-m-d'); ?>" required>
+                                <div class="invalid-feedback">Başlangıç tarihi seçin.</div>
+                            </div>
+                            <div>
+                                <label for="addRecEnd" class="form-label">Bitiş <span class="ink-3">(isteğe bağlı)</span></label>
+                                <input type="date" class="form-control" id="addRecEnd" name="end_date" aria-describedby="addRecEndHelp">
+                                <div class="form-text" id="addRecEndHelp">Boş kalırsa süresiz tekrarlanır.</div>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label for="addRecNotes" class="form-label">Not <span class="ink-3">(isteğe bağlı)</span></label>
+                            <textarea class="form-control" id="addRecNotes" name="notes" rows="2"></textarea>
+                        </div>
+                        <div class="sheet-actions">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                            <button type="submit" class="btn btn-primary">Düzenli gideri kaydet</button>
+                        </div>
+                    </form>
                 </div>
-                <?php endif; ?>
             </div>
         </div>
     </div>
 
-    <?php if (!empty($recurrings)): foreach ($recurrings as $r): ?>
-    <div class="modal fade" id="editRecurringModal<?php echo $r['id']; ?>" tabindex="-1">
+    <?php if (!empty($recurrings)): foreach ($recurrings as $r):
+        $rid = (int) $r['id'];
+        $rMethod = $methodNames[$r['payment_method']] ?? (string) $r['payment_method'];
+        $rInterval = $intervalNames[$r['recurrence_interval']] ?? (string) $r['recurrence_interval'];
+    ?>
+    <!-- Düzenli gideri düzenle -->
+    <div class="modal fade" id="editRecurringModal<?php echo $rid; ?>" tabindex="-1" aria-labelledby="editRecurringTitle<?php echo $rid; ?>" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Tekrarlayan Gider Düzenle</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h2 class="modal-title" id="editRecurringTitle<?php echo $rid; ?>">Düzenli gideri düzenle</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
                 </div>
                 <div class="modal-body">
+                    <p class="form-text mt-0">Değişiklik bu giderin geçmiş dönemlerdeki tekrarlarına da uygulanır. Yalnızca bundan sonrasını değiştirmek için bitiş tarihi girip yeni bir düzenli gider ekleyin.</p>
                     <form action="process/edit-recurring-expense" method="POST" class="needs-validation" novalidate>
-                        <input type="hidden" name="id" value="<?php echo $r['id']; ?>">
-                        <div class="mb-3">
-                            <label class="form-label">Başlık</label>
-                            <input type="text" class="form-control" name="title" value="<?php echo htmlspecialchars($r['title']); ?>" required>
+                        <input type="hidden" name="id" value="<?php echo $rid; ?>">
+                        <div class="field">
+                            <label for="recTitle<?php echo $rid; ?>" class="form-label">Başlık</label>
+                            <input type="text" class="form-control" id="recTitle<?php echo $rid; ?>" name="title" value="<?php echo htmlspecialchars($r['title']); ?>" required>
+                            <div class="invalid-feedback">Başlık girin.</div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Kategori</label>
-                            <input type="text" class="form-control" name="category" value="<?php echo htmlspecialchars($r['category'] ?? ''); ?>">
+                        <div class="field">
+                            <label for="recCategory<?php echo $rid; ?>" class="form-label">Kategori <span class="ink-3">(isteğe bağlı)</span></label>
+                            <input type="text" class="form-control" id="recCategory<?php echo $rid; ?>" name="category" value="<?php echo htmlspecialchars($r['category'] ?? ''); ?>">
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Tutar</label>
-                            <input type="number" class="form-control" name="amount" step="0.01" value="<?php echo $r['amount']; ?>" required>
+                        <div class="field-row field">
+                            <div>
+                                <label for="recAmount<?php echo $rid; ?>" class="form-label">Tutar (₺)</label>
+                                <input type="number" inputmode="decimal" class="form-control tnum" id="recAmount<?php echo $rid; ?>" name="amount" step="0.01" min="0" value="<?php echo htmlspecialchars((string) $r['amount']); ?>" required>
+                                <div class="invalid-feedback">Tutarı girin.</div>
+                            </div>
+                            <div>
+                                <label for="recInterval<?php echo $rid; ?>" class="form-label">Tekrar</label>
+                                <select class="form-select" id="recInterval<?php echo $rid; ?>" name="recurrence_interval" required>
+                                    <option value="weekly" <?php echo $r['recurrence_interval']=='weekly'?'selected':''; ?>>Haftalık</option>
+                                    <option value="monthly" <?php echo $r['recurrence_interval']=='monthly'?'selected':''; ?>>Aylık</option>
+                                    <option value="quarterly" <?php echo $r['recurrence_interval']=='quarterly'?'selected':''; ?>>3 aylık</option>
+                                    <option value="yearly" <?php echo $r['recurrence_interval']=='yearly'?'selected':''; ?>>Yıllık</option>
+                                </select>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Ödeme Yöntemi</label>
-                            <select class="form-select" name="payment_method" required>
-                                <option value="cash" <?php echo $r['payment_method']=='cash'?'selected':''; ?>>Nakit</option>
-                                <option value="card" <?php echo $r['payment_method']=='card'?'selected':''; ?>>Kredi Kartı</option>
-                                <option value="bank_transfer" <?php echo $r['payment_method']=='bank_transfer'?'selected':''; ?>>Havale/EFT</option>
-                                <option value="other" <?php echo $r['payment_method']=='other'?'selected':''; ?>>Diğer</option>
-                            </select>
+                        <fieldset class="field">
+                            <legend class="form-label">Ödeme yöntemi</legend>
+                            <?php echo methodChoice('recMethod' . $rid, $r['payment_method'], $methodNames, $methodIcons); ?>
+                        </fieldset>
+                        <div class="field-row field">
+                            <div>
+                                <label for="recStart<?php echo $rid; ?>" class="form-label">Başlangıç</label>
+                                <input type="date" class="form-control" id="recStart<?php echo $rid; ?>" name="start_date" value="<?php echo htmlspecialchars((string) $r['start_date']); ?>" required>
+                                <div class="invalid-feedback">Başlangıç tarihi seçin.</div>
+                            </div>
+                            <div>
+                                <label for="recEnd<?php echo $rid; ?>" class="form-label">Bitiş <span class="ink-3">(isteğe bağlı)</span></label>
+                                <input type="date" class="form-control" id="recEnd<?php echo $rid; ?>" name="end_date" value="<?php echo htmlspecialchars((string) ($r['end_date'] ?? '')); ?>">
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Başlangıç Tarihi</label>
-                            <input type="date" class="form-control" name="start_date" value="<?php echo $r['start_date']; ?>" required>
+                        <div class="field">
+                            <label for="recNotes<?php echo $rid; ?>" class="form-label">Not <span class="ink-3">(isteğe bağlı)</span></label>
+                            <textarea class="form-control" id="recNotes<?php echo $rid; ?>" name="notes" rows="2"><?php echo htmlspecialchars($r['notes'] ?? ''); ?></textarea>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Bitiş Tarihi (Opsiyonel)</label>
-                            <input type="date" class="form-control" name="end_date" value="<?php echo $r['end_date']; ?>">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Tekrar</label>
-                            <select class="form-select" name="recurrence_interval" required>
-                                <option value="weekly" <?php echo $r['recurrence_interval']=='weekly'?'selected':''; ?>>Haftalık</option>
-                                <option value="monthly" <?php echo $r['recurrence_interval']=='monthly'?'selected':''; ?>>Aylık</option>
-                                <option value="quarterly" <?php echo $r['recurrence_interval']=='quarterly'?'selected':''; ?>>3 Aylık</option>
-                                <option value="yearly" <?php echo $r['recurrence_interval']=='yearly'?'selected':''; ?>>Yıllık</option>
-                            </select>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label">Notlar</label>
-                            <textarea class="form-control" name="notes" rows="3"><?php echo htmlspecialchars($r['notes'] ?? ''); ?></textarea>
-                        </div>
-                        <div class="d-flex justify-content-end">
-                            <button type="button" class="btn btn-secondary me-2" data-bs-dismiss="modal">İptal</button>
+                        <div class="sheet-actions">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
                             <button type="submit" class="btn btn-primary">Kaydet</button>
                         </div>
                     </form>
@@ -646,25 +710,63 @@ include 'includes/header.php';
             </div>
         </div>
     </div>
-    <?php endforeach; endif; ?>
 
-    <?php if (!empty($recurrings)): foreach ($recurrings as $r): ?>
-    <div class="modal fade" id="deleteRecurringModal<?php echo $r['id']; ?>" tabindex="-1">
+    <!-- Düzenli gideri durdur / yeniden başlat -->
+    <div class="modal fade" id="toggleRecurringModal<?php echo $rid; ?>" tabindex="-1" aria-labelledby="toggleRecurringTitle<?php echo $rid; ?>" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Tekrarlayan Gideri Sil</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h2 class="modal-title" id="toggleRecurringTitle<?php echo $rid; ?>"><?php echo $r['active'] ? 'Düzenli gideri durdur' : 'Düzenli gideri yeniden başlat'; ?></h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i><strong>Dikkat!</strong> Bu işlem geri alınamaz.</div>
-                    <p><strong><?php echo htmlspecialchars($r['title']); ?></strong> tekrarlayan giderini silmek istediğinizden emin misiniz?</p>
+                    <div class="sheet-summary no-lead">
+                        <div>
+                            <p class="row-title"><span><?php echo htmlspecialchars($r['title']); ?></span></p>
+                            <p class="row-meta"><?php echo htmlspecialchars($rInterval . ' · ' . $rMethod); ?></p>
+                        </div>
+                        <span class="row-amount"><?php echo money($r['amount']); ?></span>
+                    </div>
+                    <?php if ($r['active']): ?>
+                    <p>Durdurulan gider bu sayfadan ve geçmiş dönemler dahil tüm toplamlardan çıkar. Geçmiş ayları koruyup yalnızca bundan sonrasını durdurmak için “Düzenle”den bitiş tarihi girin.</p>
+                    <?php else: ?>
+                    <p>Gider yeniden her dönemin listesine ve toplamına eklenir.</p>
+                    <?php endif; ?>
+                    <form action="process/toggle-recurring-expense" method="POST">
+                        <input type="hidden" name="id" value="<?php echo $rid; ?>">
+                        <div class="sheet-actions">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                            <button type="submit" class="btn btn-primary"><?php echo $r['active'] ? 'Gideri durdur' : 'Yeniden başlat'; ?></button>
+                        </div>
+                    </form>
                 </div>
-                <div class="modal-footer">
-                    <form action="process/delete-recurring-expense" method="POST" class="d-inline">
-                        <input type="hidden" name="id" value="<?php echo $r['id']; ?>">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
-                        <button type="submit" class="btn btn-danger">Sil</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Düzenli gideri sil -->
+    <div class="modal fade" id="deleteRecurringModal<?php echo $rid; ?>" tabindex="-1" aria-labelledby="deleteRecurringTitle<?php echo $rid; ?>" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title" id="deleteRecurringTitle<?php echo $rid; ?>">Düzenli gideri sil</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="sheet-summary no-lead">
+                        <div>
+                            <p class="row-title"><span><?php echo htmlspecialchars($r['title']); ?></span></p>
+                            <p class="row-meta"><?php echo htmlspecialchars($rInterval . ' · ' . $rMethod); ?></p>
+                        </div>
+                        <span class="row-amount"><?php echo money($r['amount']); ?></span>
+                    </div>
+                    <p>Bu düzenli gider, geçmiş dönemlerdeki tekrarlarıyla birlikte kalıcı olarak silinir. Geçmiş ayları korumak için bunun yerine “Düzenle”den bitiş tarihi girin. Bu işlem geri alınamaz.</p>
+                    <form action="process/delete-recurring-expense" method="POST">
+                        <input type="hidden" name="id" value="<?php echo $rid; ?>">
+                        <div class="sheet-actions">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                            <button type="submit" class="btn btn-danger">Düzenli gideri sil</button>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -673,5 +775,3 @@ include 'includes/header.php';
     <?php endforeach; endif; ?>
 
 <?php include 'includes/footer.php'; ?>
-
-

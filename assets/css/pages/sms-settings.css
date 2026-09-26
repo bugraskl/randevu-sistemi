@@ -1,0 +1,49 @@
+/* SMS Ayarları — yalnızca tokenlar */
+
+/* Şablon değişkeni: küçük, kod görünümlü çip */
+.sms-var {
+    display: inline-block;
+    padding: 1px 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-pill);
+    background: var(--surface-2);
+    color: var(--ink);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    white-space: nowrap;
+}
+
+.sms-vars-intro,
+.sms-note {
+    margin: 0 0 var(--s-3);
+    font-size: 0.875rem;
+    color: var(--ink-3);
+}
+
+.sms-vars {
+    margin: 0;
+    display: grid;
+    gap: var(--s-2);
+}
+
+.sms-vars > div {
+    display: grid;
+    grid-template-columns: 8.5rem minmax(0, 1fr);
+    align-items: center;
+    gap: var(--s-3);
+}
+
+.sms-vars dt {
+    font-weight: 400;
+}
+
+.sms-vars dd {
+    margin: 0;
+    font-size: 0.9375rem;
+    color: var(--ink-2);
+}
+
+.sms-template-form textarea.form-control {
+    min-height: 120px;
+}

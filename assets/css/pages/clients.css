@@ -1,0 +1,59 @@
+/* Danışanlar — yalnızca bu sayfaya özgü düzen; renkler tokenlardan */
+
+/* Arama: alan + "Ara" düğmesi yan yana */
+.client-search {
+    margin-bottom: var(--s-6);
+}
+
+.search-row {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+}
+
+.search-row > .search-field {
+    flex: 1;
+    min-width: 0;
+}
+
+.search-row > .btn {
+    flex-shrink: 0;
+    min-height: 48px;
+}
+
+.search-hint {
+    margin: var(--s-2) var(--s-1) 0;
+}
+
+/* Satırın tamamı karta gider; "Ara" düğmesi bağlantının üstünde kalır */
+.client-list .row-item {
+    transition: background var(--t-1) var(--ease);
+}
+
+.client-list .row-item:hover {
+    background: var(--surface-2);
+}
+
+.client-list .row-item:active {
+    background: var(--wall-2);
+}
+
+.client-list .row-trail {
+    position: relative;
+    z-index: 2;
+}
+
+.client-list .stretched-link:focus-visible {
+    outline: none;
+}
+
+.client-list .stretched-link:focus-visible::after {
+    outline: 2px solid var(--focus);
+    outline-offset: -2px;
+    border-radius: var(--r);
+}
+
+.list-foot {
+    margin: var(--s-3) var(--s-1) 0;
+    font-size: 0.8125rem;
+}

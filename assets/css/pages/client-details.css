@@ -1,0 +1,154 @@
+/* Danışan kartı — yalnızca bu sayfanın düzeni; renkler tokenlardan */
+
+.client-page {
+    display: grid;
+    gap: var(--s-6);
+}
+
+.client-side {
+    display: grid;
+    gap: var(--s-4);
+    min-width: 0;
+}
+
+.client-main,
+.client-extra {
+    min-width: 0;
+}
+
+/* Masaüstü: solda kimlik + hesap + notlar, sağda seanslar */
+@media (min-width: 992px) {
+    .client-page {
+        grid-template-columns: minmax(320px, 5fr) minmax(0, 7fr);
+        grid-template-rows: auto 1fr;
+        grid-template-areas:
+            "side main"
+            "extra main";
+        align-items: start;
+        gap: var(--s-6) var(--s-7);
+    }
+
+    .client-side {
+        grid-area: side;
+    }
+
+    .client-main {
+        grid-area: main;
+    }
+
+    .client-extra {
+        grid-area: extra;
+    }
+}
+
+/* Kimlik bloğu */
+.client-id-head {
+    display: flex;
+    align-items: center;
+    gap: var(--s-4);
+}
+
+.client-avatar {
+    width: 56px;
+    height: 56px;
+    font-size: 1.125rem;
+}
+
+.client-id-text {
+    min-width: 0;
+}
+
+.client-id-name {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1.25;
+    overflow-wrap: anywhere;
+}
+
+.client-id-line {
+    margin: 2px 0 0;
+    font-size: 0.9375rem;
+    color: var(--ink-2);
+    overflow-wrap: anywhere;
+}
+
+.client-id-since {
+    margin: var(--s-1) 0 0;
+    font-size: 0.8125rem;
+    color: var(--ink-3);
+}
+
+.client-id-actions {
+    display: flex;
+    gap: var(--s-2);
+    margin-top: var(--s-4);
+}
+
+.client-id-actions > .btn {
+    flex: 1;
+}
+
+/* Hesap şeridi: ödeme bekleyen seans varsa kökboya */
+.client-ledger .ledger-value.is-due {
+    color: var(--madder);
+}
+
+/* Sessiz bilgi satırları */
+.client-quiet {
+    margin: 0;
+    font-size: 0.9375rem;
+    color: var(--ink-3);
+}
+
+.client-facts {
+    margin: 0;
+}
+
+.client-facts dt {
+    font-size: 0.8125rem;
+    font-weight: 550;
+    color: var(--ink-3);
+}
+
+.client-facts dd {
+    margin: 2px 0 0;
+    color: var(--ink);
+    overflow-wrap: anywhere;
+}
+
+.client-facts dd + dt {
+    margin-top: var(--s-3);
+}
+
+.client-danger {
+    margin-top: var(--s-6);
+    padding: 0 var(--s-1);
+}
+
+/* Geçmiş seanslar: ilk ay başlığı bölüm başlığına yapışık; eskiler katlanır */
+.client-main .section-head + .list-day {
+    padding-top: 0;
+}
+
+.older-sessions {
+    margin-top: var(--s-4);
+}
+
+.older-sessions > summary {
+    list-style: none;
+}
+
+.older-sessions > summary::-webkit-details-marker {
+    display: none;
+}
+
+.older-sessions .when-open,
+.older-sessions[open] .when-closed {
+    display: none;
+}
+
+.older-sessions[open] .when-open {
+    display: inline;
+}

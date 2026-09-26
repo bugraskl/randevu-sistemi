@@ -70,208 +70,206 @@ try {
     $total_pages = 1;
 }
 
+// --- Görünüm için yardımcılar (sorgulara dokunmaz) ---
+function userInitials($name) {
+    $parts = array_filter(preg_split('/\s+/u', trim((string) $name)));
+    $initials = '';
+    foreach (array_slice($parts, 0, 2) as $part) {
+        $initials .= mb_strtoupper(mb_substr($part, 0, 1, 'UTF-8'), 'UTF-8');
+    }
+    return $initials !== '' ? $initials : '?';
+}
+
+$roleNames = ['admin' => 'Yönetici', 'user' => 'Kullanıcı'];
+
+$pageTitle = 'Kullanıcı Yönetimi';
+$pageSubtitle = isset($total_records) ? ((int) $total_records . ' kullanıcı') : '';
+$pageActions = '<button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addUserModal"><i class="bi bi-person-plus" aria-hidden="true"></i> Kullanıcı ekle</button>';
+
 // Header'ı dahil et
 include 'includes/header.php';
 ?>
-
-
-<body class="<?php echo $themeClass; ?>">
+<body class="<?php echo $themeClass; ?>" data-page="user-management">
     <div class="wrapper">
         <?php include 'includes/sidebar.php'; ?>
 
-        <!-- Page Content -->
-        <div id="content">
-            <nav class="navbar navbar-expand-lg navbar-light bg-light">
-                <div class="container-fluid">
-                    <button type="button" id="sidebarCollapse" class="btn btn-secondary">
-                        <i class="bi bi-list"></i>
-                    </button>
-                    <div class="ms-auto">
-                        <button type="button" id="themeToggle" class="btn btn-outline-secondary me-2">
-                            <i class="bi bi-moon-fill"></i>
-                        </button>
-                        <a href="auth/logout" class="btn btn-outline-danger">
-                            <i class="bi bi-box-arrow-right"></i> Çıkış Yap
-                        </a>
+        <main id="content" tabindex="-1">
+            <?php include 'includes/topbar.php'; ?>
+
+            <div class="page">
+                <div class="um-search">
+                    <div class="search-field">
+                        <i class="bi bi-search" aria-hidden="true"></i>
+                        <label for="searchInput" class="visually-hidden">Kullanıcı ara</label>
+                        <input type="search" id="searchInput" class="form-control" placeholder="Ad veya e-posta" autocomplete="off">
                     </div>
+                    <button class="btn btn-secondary" type="button" id="searchButton">Ara</button>
                 </div>
-            </nav>
 
-            <div class="container-fluid p-4">
-                <!-- Kullanıcı Listesi -->
-                <div class="card">
-                    <div class="card-header">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0">Kullanıcı Yönetimi</h5>
-                            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addUserModal">
-                                <i class="bi bi-person-plus"></i> Yeni Kullanıcı Ekle
-                            </button>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="d-flex align-items-center mb-3">
-                            <div class="input-group">
-                                <input type="text" id="searchInput" class="form-control" placeholder="Kullanıcı ara..." autocomplete="off">
-                                <button class="btn btn-primary" type="button" id="searchButton">
-                                    <i class="bi bi-search"></i>
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <?php if (empty($users)): ?>
-                        <div class="text-center py-5">
-                            <i class="bi bi-person-x display-1 text-muted"></i>
-                            <p class="mt-3 text-muted">Henüz kayıtlı kullanıcı bulunmamaktadır.</p>
-                        </div>
-                        <?php else: ?>
-                        <div class="table-responsive">
-                            <table class="table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Ad Soyad</th>
-                                        <th>E-posta</th>
-                                        <th>Rol</th>
-                                        <th>Durum</th>
-                                        <th>Kayıt Tarihi</th>
-                                        <th>İşlemler</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($users as $user): ?>
-                                    <tr>
-                                        <td><?php echo htmlspecialchars($user['name']); ?></td>
-                                        <td><?php echo htmlspecialchars($user['email']); ?></td>
-                                        <td>
-                                            <span class="badge <?php echo $user['role'] === 'admin' ? 'bg-danger' : 'bg-secondary'; ?>">
-                                                <?php echo $user['role'] === 'admin' ? 'Yönetici' : 'Kullanıcı'; ?>
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="badge <?php echo $user['status'] === 'active' ? 'bg-success' : 'bg-warning'; ?>">
-                                                <?php echo $user['status'] === 'active' ? 'Aktif' : 'Pasif'; ?>
-                                            </span>
-                                        </td>
-                                        <td><?php echo date('d.m.Y H:i', strtotime($user['created_at'])); ?></td>
-                                        <td>
-                                            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editUserModal<?php echo $user['id']; ?>">
-                                                <i class="bi bi-pencil"></i>
-                                            </button>
-                                            <?php if ($user['id'] != $_SESSION['user_id']): ?>
-                                            <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#deleteUserModal<?php echo $user['id']; ?>">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <!-- Sayfalama -->
-                        <?php if ($total_pages > 1): ?>
-                        <nav aria-label="Sayfalama" class="mt-4">
-                            <ul class="pagination justify-content-center">
-                                <?php if ($page > 1): ?>
-                                <li class="page-item">
-                                    <a class="page-link" href="?page=<?php echo $page - 1; ?>" aria-label="Önceki">
-                                        <span aria-hidden="true">&laquo;</span>
-                                    </a>
-                                </li>
-                                <?php endif; ?>
-
-                                <?php
-                                $start_page = max(1, $page - 2);
-                                $end_page = min($total_pages, $page + 2);
-
-                                if ($start_page > 1) {
-                                    echo '<li class="page-item"><a class="page-link" href="?page=1">1</a></li>';
-                                    if ($start_page > 2) {
-                                        echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                                    }
-                                }
-
-                                for ($i = $start_page; $i <= $end_page; $i++) {
-                                    echo '<li class="page-item ' . ($i == $page ? 'active' : '') . '">';
-                                    echo '<a class="page-link" href="?page=' . $i . '">' . $i . '</a>';
-                                    echo '</li>';
-                                }
-
-                                if ($end_page < $total_pages) {
-                                    if ($end_page < $total_pages - 1) {
-                                        echo '<li class="page-item disabled"><span class="page-link">...</span></li>';
-                                    }
-                                    echo '<li class="page-item"><a class="page-link" href="?page=' . $total_pages . '">' . $total_pages . '</a></li>';
-                                }
-                                ?>
-
-                                <?php if ($page < $total_pages): ?>
-                                <li class="page-item">
-                                    <a class="page-link" href="?page=<?php echo $page + 1; ?>" aria-label="Sonraki">
-                                        <span aria-hidden="true">&raquo;</span>
-                                    </a>
-                                </li>
-                                <?php endif; ?>
-                            </ul>
-                        </nav>
-                        <?php endif; ?>
-                        <?php endif; ?>
-                    </div>
+                <?php if (empty($users)): ?>
+                <div class="empty">
+                    <p class="empty-title">Henüz kullanıcı yok</p>
+                    <p>Üstteki “Kullanıcı ekle” ile ilk kullanıcıyı oluşturun.</p>
                 </div>
+                <?php else: ?>
+                <div class="table-responsive">
+                    <table class="table table-stack">
+                        <thead>
+                            <tr>
+                                <th scope="col">Ad soyad</th>
+                                <th scope="col">E-posta</th>
+                                <th scope="col">Rol</th>
+                                <th scope="col">Durum</th>
+                                <th scope="col">Kayıt tarihi</th>
+                                <th scope="col"><span class="visually-hidden">İşlemler</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($users as $user):
+                                $isSelf = $user['id'] == $_SESSION['user_id'];
+                                $isActive = $user['status'] === 'active';
+                            ?>
+                            <tr>
+                                <td class="td-title">
+                                    <span class="um-user">
+                                        <span class="avatar avatar-sm" aria-hidden="true"><?php echo htmlspecialchars(userInitials($user['name'])); ?></span>
+                                        <span class="um-name">
+                                            <?php echo htmlspecialchars($user['name']); ?>
+                                            <?php if ($isSelf): ?><span class="badge bg-secondary">Siz</span><?php endif; ?>
+                                        </span>
+                                    </span>
+                                </td>
+                                <td data-label="E-posta"><?php echo htmlspecialchars($user['email']); ?></td>
+                                <td data-label="Rol">
+                                    <span class="badge <?php echo $user['role'] === 'admin' ? 'bg-primary' : 'bg-secondary'; ?>"><?php echo $user['role'] === 'admin' ? 'Yönetici' : 'Kullanıcı'; ?></span>
+                                </td>
+                                <td data-label="Durum">
+                                    <?php if ($isActive): ?>
+                                    <span class="mark mark-confirmed">Aktif</span>
+                                    <?php else: ?>
+                                    <span class="mark mark-pending">Pasif</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td data-label="Kayıt tarihi" class="tnum"><?php echo date('d.m.Y H:i', strtotime($user['created_at'])); ?></td>
+                                <td class="td-actions">
+                                    <div class="um-actions">
+                                        <button type="button" class="btn btn-sm btn-secondary" data-bs-toggle="modal" data-bs-target="#editUserModal<?php echo (int) $user['id']; ?>">
+                                            Düzenle<span class="visually-hidden">: <?php echo htmlspecialchars($user['name']); ?></span>
+                                        </button>
+                                        <?php if (!$isSelf): ?>
+                                        <button type="button" class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteUserModal<?php echo (int) $user['id']; ?>">
+                                            Sil<span class="visually-hidden">: <?php echo htmlspecialchars($user['name']); ?></span>
+                                        </button>
+                                        <?php endif; ?>
+                                    </div>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Sayfalama -->
+                <?php if ($total_pages > 1): ?>
+                <nav aria-label="Kullanıcı listesi sayfaları" class="mt-4">
+                    <ul class="pagination justify-content-center">
+                        <?php if ($page > 1): ?>
+                        <li class="page-item">
+                            <a class="page-link" href="?page=<?php echo $page - 1; ?>">Önceki</a>
+                        </li>
+                        <?php endif; ?>
+
+                        <?php
+                        $start_page = max(1, $page - 2);
+                        $end_page = min($total_pages, $page + 2);
+
+                        if ($start_page > 1) {
+                            echo '<li class="page-item"><a class="page-link" href="?page=1">1</a></li>';
+                            if ($start_page > 2) {
+                                echo '<li class="page-item disabled"><span class="page-link">…</span></li>';
+                            }
+                        }
+
+                        for ($i = $start_page; $i <= $end_page; $i++) {
+                            echo '<li class="page-item ' . ($i == $page ? 'active' : '') . '">';
+                            echo '<a class="page-link" href="?page=' . $i . '"' . ($i == $page ? ' aria-current="page"' : '') . '>' . $i . '</a>';
+                            echo '</li>';
+                        }
+
+                        if ($end_page < $total_pages) {
+                            if ($end_page < $total_pages - 1) {
+                                echo '<li class="page-item disabled"><span class="page-link">…</span></li>';
+                            }
+                            echo '<li class="page-item"><a class="page-link" href="?page=' . $total_pages . '">' . $total_pages . '</a></li>';
+                        }
+                        ?>
+
+                        <?php if ($page < $total_pages): ?>
+                        <li class="page-item">
+                            <a class="page-link" href="?page=<?php echo $page + 1; ?>">Sonraki</a>
+                        </li>
+                        <?php endif; ?>
+                    </ul>
+                </nav>
+                <?php endif; ?>
+                <?php endif; ?>
             </div>
-        </div>
+        </main>
     </div>
 
     <!-- Yeni Kullanıcı Modal -->
-    <div class="modal fade" id="addUserModal" tabindex="-1">
+    <div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserTitle" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Yeni Kullanıcı Ekle</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h2 class="modal-title" id="addUserTitle">Kullanıcı ekle</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
                 </div>
                 <form action="process/add-user" method="POST" class="needs-validation" novalidate>
                     <div class="modal-body">
-                        <div class="mb-3">
-                            <label for="name" class="form-label">Ad Soyad</label>
-                            <input type="text" class="form-control" id="name" name="name" required>
-                            <div class="invalid-feedback">Lütfen ad soyad giriniz.</div>
+                        <div class="field">
+                            <label for="name" class="form-label">Ad soyad</label>
+                            <input type="text" class="form-control" id="name" name="name" autocomplete="off" required>
+                            <div class="invalid-feedback">Ad soyad girin.</div>
                         </div>
-                        <div class="mb-3">
+                        <div class="field">
                             <label for="email" class="form-label">E-posta</label>
-                            <input type="email" class="form-control" id="email" name="email" required>
-                            <div class="invalid-feedback">Lütfen geçerli bir e-posta adresi giriniz.</div>
+                            <input type="email" class="form-control" id="email" name="email" inputmode="email" autocomplete="off" required>
+                            <div class="invalid-feedback">Geçerli bir e-posta adresi girin.</div>
                         </div>
-                        <div class="mb-3">
+                        <div class="field">
                             <label for="password" class="form-label">Şifre</label>
-                            <input type="password" class="form-control" id="password" name="password" minlength="6" required>
-                            <div class="invalid-feedback">Şifre en az 6 karakter olmalıdır.</div>
+                            <input type="password" class="form-control" id="password" name="password" minlength="6" autocomplete="new-password" aria-describedby="passwordHelp" required>
+                            <div class="form-text" id="passwordHelp">En az 6 karakter.</div>
+                            <div class="invalid-feedback">Şifre en az 6 karakter olmalı.</div>
                         </div>
-                        <div class="mb-3">
-                            <label for="role" class="form-label">Rol</label>
-                            <select class="form-select" id="role" name="role" required>
-                                <option value="">Rol Seçiniz</option>
-                                <option value="user">Kullanıcı</option>
-                                <option value="admin">Yönetici</option>
-                            </select>
-                            <div class="invalid-feedback">Lütfen bir rol seçiniz.</div>
+                        <div class="field-row">
+                            <div class="field">
+                                <label for="role" class="form-label">Rol</label>
+                                <select class="form-select" id="role" name="role" required>
+                                    <option value="">Seçin</option>
+                                    <option value="user">Kullanıcı</option>
+                                    <option value="admin">Yönetici</option>
+                                </select>
+                                <div class="invalid-feedback">Bir rol seçin.</div>
+                            </div>
+                            <div class="field">
+                                <label for="status" class="form-label">Durum</label>
+                                <select class="form-select" id="status" name="status" required>
+                                    <option value="">Seçin</option>
+                                    <option value="active" selected>Aktif</option>
+                                    <option value="inactive">Pasif</option>
+                                </select>
+                                <div class="invalid-feedback">Bir durum seçin.</div>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="status" class="form-label">Durum</label>
-                            <select class="form-select" id="status" name="status" required>
-                                <option value="">Durum Seçiniz</option>
-                                <option value="active" selected>Aktif</option>
-                                <option value="inactive">Pasif</option>
-                            </select>
-                            <div class="invalid-feedback">Lütfen bir durum seçiniz.</div>
+                        <div class="sheet-actions">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                            <button type="submit" class="btn btn-primary">
+                                <span class="spinner-border spinner-border-sm d-none" role="status"></span>
+                                Kullanıcıyı ekle
+                            </button>
                         </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
-                        <button type="submit" class="btn btn-primary">
-                            <span class="spinner-border spinner-border-sm d-none me-2" role="status"></span>
-                            Kullanıcı Ekle
-                        </button>
                     </div>
                 </form>
             </div>
@@ -280,54 +278,57 @@ include 'includes/header.php';
 
     <!-- Düzenleme Modalleri -->
     <?php foreach ($users as $user): ?>
-    <div class="modal fade" id="editUserModal<?php echo $user['id']; ?>" tabindex="-1">
+    <div class="modal fade" id="editUserModal<?php echo $user['id']; ?>" tabindex="-1" aria-labelledby="editUserTitle<?php echo (int) $user['id']; ?>" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Kullanıcı Düzenle</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h2 class="modal-title" id="editUserTitle<?php echo (int) $user['id']; ?>">Kullanıcıyı düzenle</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
                 </div>
                 <form action="process/edit-user" method="POST" class="needs-validation" novalidate>
                     <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
                     <div class="modal-body">
-                        <div class="mb-3">
-                            <label for="edit_name<?php echo $user['id']; ?>" class="form-label">Ad Soyad</label>
-                            <input type="text" class="form-control" id="edit_name<?php echo $user['id']; ?>" name="name" value="<?php echo htmlspecialchars($user['name']); ?>" required>
-                            <div class="invalid-feedback">Lütfen ad soyad giriniz.</div>
+                        <div class="field">
+                            <label for="edit_name<?php echo $user['id']; ?>" class="form-label">Ad soyad</label>
+                            <input type="text" class="form-control" id="edit_name<?php echo $user['id']; ?>" name="name" value="<?php echo htmlspecialchars($user['name']); ?>" autocomplete="off" required>
+                            <div class="invalid-feedback">Ad soyad girin.</div>
                         </div>
-                        <div class="mb-3">
+                        <div class="field">
                             <label for="edit_email<?php echo $user['id']; ?>" class="form-label">E-posta</label>
-                            <input type="email" class="form-control" id="edit_email<?php echo $user['id']; ?>" name="email" value="<?php echo htmlspecialchars($user['email']); ?>" required>
-                            <div class="invalid-feedback">Lütfen geçerli bir e-posta adresi giriniz.</div>
+                            <input type="email" class="form-control" id="edit_email<?php echo $user['id']; ?>" name="email" value="<?php echo htmlspecialchars($user['email']); ?>" inputmode="email" autocomplete="off" required>
+                            <div class="invalid-feedback">Geçerli bir e-posta adresi girin.</div>
                         </div>
-                        <div class="mb-3">
-                            <label for="edit_password<?php echo $user['id']; ?>" class="form-label">Yeni Şifre (Boş bırakılırsa değişmez)</label>
-                            <input type="password" class="form-control" id="edit_password<?php echo $user['id']; ?>" name="password" minlength="6">
-                            <div class="invalid-feedback">Şifre en az 6 karakter olmalıdır.</div>
+                        <div class="field">
+                            <label for="edit_password<?php echo $user['id']; ?>" class="form-label">Yeni şifre</label>
+                            <input type="password" class="form-control" id="edit_password<?php echo $user['id']; ?>" name="password" minlength="6" autocomplete="new-password" aria-describedby="edit_passwordHelp<?php echo (int) $user['id']; ?>">
+                            <div class="form-text" id="edit_passwordHelp<?php echo (int) $user['id']; ?>">Boş bırakırsanız şifre değişmez. En az 6 karakter.</div>
+                            <div class="invalid-feedback">Şifre en az 6 karakter olmalı.</div>
                         </div>
-                        <div class="mb-3">
-                            <label for="edit_role<?php echo $user['id']; ?>" class="form-label">Rol</label>
-                            <select class="form-select" id="edit_role<?php echo $user['id']; ?>" name="role" required>
-                                <option value="user" <?php echo $user['role'] === 'user' ? 'selected' : ''; ?>>Kullanıcı</option>
-                                <option value="admin" <?php echo $user['role'] === 'admin' ? 'selected' : ''; ?>>Yönetici</option>
-                            </select>
-                            <div class="invalid-feedback">Lütfen bir rol seçiniz.</div>
+                        <div class="field-row">
+                            <div class="field">
+                                <label for="edit_role<?php echo $user['id']; ?>" class="form-label">Rol</label>
+                                <select class="form-select" id="edit_role<?php echo $user['id']; ?>" name="role" required>
+                                    <option value="user" <?php echo $user['role'] === 'user' ? 'selected' : ''; ?>>Kullanıcı</option>
+                                    <option value="admin" <?php echo $user['role'] === 'admin' ? 'selected' : ''; ?>>Yönetici</option>
+                                </select>
+                                <div class="invalid-feedback">Bir rol seçin.</div>
+                            </div>
+                            <div class="field">
+                                <label for="edit_status<?php echo $user['id']; ?>" class="form-label">Durum</label>
+                                <select class="form-select" id="edit_status<?php echo $user['id']; ?>" name="status" required>
+                                    <option value="active" <?php echo $user['status'] === 'active' ? 'selected' : ''; ?>>Aktif</option>
+                                    <option value="inactive" <?php echo $user['status'] === 'inactive' ? 'selected' : ''; ?>>Pasif</option>
+                                </select>
+                                <div class="invalid-feedback">Bir durum seçin.</div>
+                            </div>
                         </div>
-                        <div class="mb-3">
-                            <label for="edit_status<?php echo $user['id']; ?>" class="form-label">Durum</label>
-                            <select class="form-select" id="edit_status<?php echo $user['id']; ?>" name="status" required>
-                                <option value="active" <?php echo $user['status'] === 'active' ? 'selected' : ''; ?>>Aktif</option>
-                                <option value="inactive" <?php echo $user['status'] === 'inactive' ? 'selected' : ''; ?>>Pasif</option>
-                            </select>
-                            <div class="invalid-feedback">Lütfen bir durum seçiniz.</div>
+                        <div class="sheet-actions">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                            <button type="submit" class="btn btn-primary">
+                                <span class="spinner-border spinner-border-sm d-none" role="status"></span>
+                                Değişiklikleri kaydet
+                            </button>
                         </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
-                        <button type="submit" class="btn btn-primary">
-                            <span class="spinner-border spinner-border-sm d-none me-2" role="status"></span>
-                            Kullanıcı Güncelle
-                        </button>
                     </div>
                 </form>
             </div>
@@ -336,26 +337,32 @@ include 'includes/header.php';
 
     <!-- Silme Modal -->
     <?php if ($user['id'] != $_SESSION['user_id']): ?>
-    <div class="modal fade" id="deleteUserModal<?php echo $user['id']; ?>" tabindex="-1">
+    <div class="modal fade" id="deleteUserModal<?php echo $user['id']; ?>" tabindex="-1" aria-labelledby="deleteUserTitle<?php echo (int) $user['id']; ?>" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Kullanıcı Sil</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <h2 class="modal-title" id="deleteUserTitle<?php echo (int) $user['id']; ?>">Kullanıcıyı sil</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
                 </div>
                 <div class="modal-body">
-                    <p><strong><?php echo htmlspecialchars($user['name']); ?></strong> adlı kullanıcıyı silmek istediğinizden emin misiniz?</p>
-                    <p class="text-danger"><small>Bu işlem geri alınamaz!</small></p>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">İptal</button>
-                    <form action="process/delete-user" method="POST" style="display: inline;">
-                        <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
-                        <button type="submit" class="btn btn-danger">
-                            <span class="spinner-border spinner-border-sm d-none me-2" role="status"></span>
-                            Sil
-                        </button>
-                    </form>
+                    <div class="sheet-summary">
+                        <span class="avatar avatar-sm" aria-hidden="true"><?php echo htmlspecialchars(userInitials($user['name'])); ?></span>
+                        <div>
+                            <p class="row-title"><span><?php echo htmlspecialchars($user['name']); ?></span></p>
+                            <p class="row-meta"><?php echo htmlspecialchars($user['email']); ?> · <?php echo htmlspecialchars($roleNames[$user['role']] ?? $user['role']); ?></p>
+                        </div>
+                    </div>
+                    <p>Bu kullanıcı silinir ve artık giriş yapamaz. Bu işlem geri alınamaz.</p>
+                    <div class="sheet-actions">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Vazgeç</button>
+                        <form action="process/delete-user" method="POST">
+                            <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
+                            <button type="submit" class="btn btn-danger">
+                                <span class="spinner-border spinner-border-sm d-none" role="status"></span>
+                                Kullanıcıyı sil
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
         </div>
@@ -477,4 +484,98 @@ include 'includes/header.php';
         });
     </script>
 
-<?php include 'includes/footer.php'; ?> 
+    <script>
+        // Arama sonuçları (assets/js/user-management.js) eski tablo satırı üretir;
+        // bu satırları sayfanın diliyle aynı görünüme getirir: etiketler, sözlü düğmeler, durum işareti.
+        (function () {
+            const tbody = document.querySelector('tbody');
+            if (!tbody || !window.MutationObserver) {
+                return;
+            }
+            const labels = [null, 'E-posta', 'Rol', 'Durum', 'Kayıt tarihi', null];
+
+            function initials(name) {
+                return name.trim().split(/\s+/).slice(0, 2).map(p => p.charAt(0).toLocaleUpperCase('tr-TR')).join('') || '?';
+            }
+
+            function decorate(tr) {
+                if (tr.nodeType !== 1 || tr.tagName !== 'TR' || tr.dataset.umReady) {
+                    return;
+                }
+                const cells = tr.children;
+                if (cells.length !== 6) {
+                    return; // yükleniyor / sonuç yok satırı
+                }
+                tr.dataset.umReady = '1';
+
+                for (let i = 1; i <= 4; i++) {
+                    cells[i].setAttribute('data-label', labels[i]);
+                }
+                cells[4].classList.add('tnum');
+
+                // Ad hücresi: baş harf + ad
+                const nameCell = cells[0];
+                const name = nameCell.textContent.trim();
+                nameCell.className = 'td-title';
+                nameCell.textContent = '';
+                const wrap = document.createElement('span');
+                wrap.className = 'um-user';
+                const avatar = document.createElement('span');
+                avatar.className = 'avatar avatar-sm';
+                avatar.setAttribute('aria-hidden', 'true');
+                avatar.textContent = initials(name);
+                const nameEl = document.createElement('span');
+                nameEl.className = 'um-name';
+                nameEl.textContent = name;
+                wrap.append(avatar, nameEl);
+                nameCell.appendChild(wrap);
+
+                // Rol: yönetici için kökboya değil, ana renk etiketi
+                const roleBadge = cells[2].querySelector('.badge');
+                if (roleBadge && roleBadge.classList.contains('bg-danger')) {
+                    roleBadge.classList.replace('bg-danger', 'bg-primary');
+                }
+
+                // Durum: tek durum dili
+                const statusText = cells[3].textContent.trim();
+                const mark = document.createElement('span');
+                mark.className = 'mark ' + (statusText === 'Aktif' ? 'mark-confirmed' : 'mark-pending');
+                mark.textContent = statusText;
+                cells[3].textContent = '';
+                cells[3].appendChild(mark);
+
+                // Eylemler: kelimeyle (onclick işleyicileri korunur)
+                const actionCell = cells[5];
+                const actions = document.createElement('div');
+                actions.className = 'um-actions';
+                actionCell.querySelectorAll('button').forEach(btn => {
+                    const onclick = btn.getAttribute('onclick') || '';
+                    const isEdit = onclick.indexOf('openEditModal') === 0;
+                    btn.className = 'btn btn-sm ' + (isEdit ? 'btn-secondary' : 'btn-outline-danger');
+                    btn.textContent = isEdit ? 'Düzenle' : 'Sil';
+                    const hidden = document.createElement('span');
+                    hidden.className = 'visually-hidden';
+                    hidden.textContent = ': ' + name;
+                    btn.appendChild(hidden);
+                    actions.appendChild(btn);
+
+                    const idMatch = onclick.match(/openEditModal\((\d+)\)/);
+                    if (isEdit && idMatch && String(window.currentUserId) === idMatch[1]) {
+                        const self = document.createElement('span');
+                        self.className = 'badge bg-secondary';
+                        self.textContent = 'Siz';
+                        nameEl.append(' ', self);
+                    }
+                });
+                actionCell.className = 'td-actions';
+                actionCell.textContent = '';
+                actionCell.appendChild(actions);
+            }
+
+            new MutationObserver(function (mutations) {
+                mutations.forEach(m => m.addedNodes.forEach(decorate));
+            }).observe(tbody, { childList: true });
+        })();
+    </script>
+
+<?php include 'includes/footer.php'; ?>

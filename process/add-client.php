@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/database.php';
+require_once '../includes/phone.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: ../index');
@@ -16,6 +17,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     if (empty($name) || empty($phone)) {
         $_SESSION['error'] = "Ad Soyad ve Telefon alanları zorunludur.";
+        header('Location: ../clients');
+        exit();
+    }
+
+    // Telefonu tek biçime çevir (ör. +90 537 221 23 23 → 05372212323)
+    $phone = normalizePhone($phone);
+    if ($phone === null) {
+        $_SESSION['error'] = PHONE_FORMAT_HINT;
         header('Location: ../clients');
         exit();
     }

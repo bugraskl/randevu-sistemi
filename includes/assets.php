@@ -4,8 +4,8 @@
  * Cache busting özelliği ile
  */
 
-// Cache busting için version
-$assetsVersion = '1.0.0';
+// Cache busting için version (tasarım yenilemesi: 2.0.0)
+$assetsVersion = '2.0.1';
 
 // Geliştirme modunda her seferinde yeni timestamp kullan
 if (defined('DEVELOPMENT_MODE') && DEVELOPMENT_MODE === true) {
@@ -41,7 +41,8 @@ $commonJS = [
     'https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js',
     'https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js',
     'assets/js/toast.js',
-    'assets/js/script.js'
+    'assets/js/script.js',
+    'assets/js/app.js'
 ];
 
 // Sayfa spesifik CSS dosyaları (isteğe bağlı)
@@ -67,6 +68,16 @@ switch ($currentPage) {
         $pageSpecificJS[] = 'assets/js/reports.js';
         break;
     // Diğer sayfalar için gerektiğinde eklenebilir
+}
+
+// Yalnızca var olan yerel dosyaları yükle (eksik dosyalar 404 üretmesin)
+$pageSpecificJS = array_values(array_filter($pageSpecificJS, function ($file) {
+    return strpos($file, 'http') === 0 || file_exists(__DIR__ . '/../' . $file);
+}));
+
+// Sayfaya özel stil dosyası: assets/css/pages/<sayfa>.css varsa otomatik eklenir
+if (file_exists(__DIR__ . '/../assets/css/pages/' . $currentPage . '.css')) {
+    $pageSpecificCSS[] = 'assets/css/pages/' . $currentPage . '.css';
 }
 
 /**
@@ -129,13 +140,21 @@ function renderSessionMessages() {
 /**
  * PWA ve meta tag'leri dahil et
  */
-function renderPWAHeaders() {
+function renderPWAHeaders($themeColor = null) {
     global $assetsVersion;
-    echo '<meta name="viewport" content="width=device-width, initial-scale=1">' . "\n";
-    echo '<meta name="theme-color" content="#212529">' . "\n";
+    $isDark = isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark';
+    // Tarayıcı çubuğu rengi: sayfa mürdüm üst alanla açılıyorsa onu, değilse duvar rengini kullan
+    $color = $themeColor ?: ($isDark ? '#151113' : '#EDEBEA');
+    echo '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">' . "\n";
+    echo '<meta name="theme-color" content="' . htmlspecialchars($color) . '"' . ($themeColor ? ' data-fixed="1"' : '') . '>' . "\n";
+    echo '<meta name="apple-mobile-web-app-capable" content="yes">' . "\n";
+    echo '<meta name="apple-mobile-web-app-status-bar-style" content="default">' . "\n";
     echo '<link rel="manifest" href="manifest.json?v=' . $assetsVersion . '">' . "\n";
-    echo '<link rel="icon" type="image/x-icon" href="assets/images/favicon.ico?v=' . $assetsVersion . '">' . "\n";
-    echo '<link rel="apple-touch-icon" href="assets/images/icon-192x192.png?v=' . $assetsVersion . '">' . "\n";
+    echo '<link rel="icon" type="image/x-icon" href="assets/icons/favicon.ico?v=' . $assetsVersion . '">' . "\n";
+    echo '<link rel="icon" type="image/svg+xml" href="assets/icons/favicon.svg?v=' . $assetsVersion . '">' . "\n";
+    echo '<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png?v=' . $assetsVersion . '">' . "\n";
+    echo '<link rel="preload" href="assets/fonts/figtree-latin.woff2" as="font" type="font/woff2" crossorigin>' . "\n";
+    echo '<link rel="preload" href="assets/fonts/figtree-latin-ext.woff2" as="font" type="font/woff2" crossorigin>' . "\n";
 }
 
 /**
