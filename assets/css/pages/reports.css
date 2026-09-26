@@ -1,0 +1,33 @@
+/* Raporlar — yalnızca tokenlar */
+
+/* Grafik alanı: Chart.js (maintainAspectRatio: false) sabit yükseklik ister */
+.chart-box {
+    height: 260px;
+    min-height: 0;
+}
+
+/* Yeni danışanlar + Ay ay: telefonda alt alta, masaüstünde yan yana */
+.report-pair {
+    margin-top: var(--s-7);
+}
+
+@media (min-width: 992px) {
+    .chart-box {
+        height: 320px;
+    }
+
+    .report-pair {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: var(--s-6);
+        align-items: start;
+    }
+
+    .report-pair > .section + .section {
+        margin-top: 0;
+    }
+
+    .report-pair .chart-box {
+        height: 280px;
+    }
+}

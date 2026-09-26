@@ -16,6 +16,12 @@ class EnvConfig {
             return;
         }
         
+        // Yerel geliştirme: yalnızca PHP yerleşik sunucusunda (php -S) dev/env.dev kullanılır.
+        // Apache/production ortamında PHP_SAPI 'cli-server' olmadığından bu blok hiç çalışmaz.
+        if ($envFile === null && PHP_SAPI === 'cli-server' && file_exists(dirname(__DIR__) . '/dev/env.dev')) {
+            $envFile = dirname(__DIR__) . '/dev/env.dev';
+        }
+
         // Varsayılan env dosyası konumu
         if ($envFile === null) {
             $envFile = dirname(__DIR__) . '/env';

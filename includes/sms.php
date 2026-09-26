@@ -157,7 +157,7 @@ function sendAppointmentConfirmation($clientName, $phone, $date, $time) {
     return sendSMS($phone, $message);
 }
 
-function sendAppointmentReminder($clientName, $phone, $time) {
+function sendAppointmentReminder($clientName, $phone, $time, $date = null) {
     // SMS gönderimi aktif mi kontrol et
     if (!EnvConfig::getBool('SMS_ENABLED', true)) {
         smsDebugLog("Randevu hatırlatma SMS'i gönderilmedi - SMS_ENABLED=false");
@@ -173,11 +173,13 @@ function sendAppointmentReminder($clientName, $phone, $time) {
                    " icin randevunuz bulunmaktadir.";
     } else {
         // Şablonu kullan
+        // Randevular onay beklemez: eski şablonlarda kalmış {teyit_linki} boş bırakılır
         $message = str_replace(
-            ['{danisan_adi}', '{saat}'],
-            [$clientName, date('H:i', strtotime($time))],
+            ['{danisan_adi}', '{tarih}', '{saat}', '{teyit_linki}'],
+            [$clientName, $date ? date('d.m.Y', strtotime($date)) : '', date('H:i', strtotime($time)), ''],
             $template
         );
+        $message = trim(preg_replace('/ {2,}/', ' ', $message));
     }
 
     return sendSMS($phone, $message);

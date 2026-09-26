@@ -1,0 +1,63 @@
+/* Kullanıcı Yönetimi — yalnızca tokenlar */
+
+.um-search {
+    display: flex;
+    gap: var(--s-2);
+    margin-bottom: var(--s-4);
+}
+
+.um-search .search-field {
+    flex: 1;
+    min-width: 0;
+}
+
+.um-user {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s-3);
+    min-width: 0;
+}
+
+.um-name {
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+
+.um-name .badge {
+    margin-left: var(--s-1);
+    vertical-align: 1px;
+}
+
+.um-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s-2);
+}
+
+/* Silme onayı: saat sütunu yerine baş harf */
+.modal .sheet-summary .avatar {
+    justify-self: start;
+}
+
+@media (max-width: 767.98px) {
+    .table-stack td[data-label] {
+        overflow-wrap: anywhere;
+        text-align: right;
+    }
+
+    .table-stack td.td-title {
+        padding-bottom: var(--s-2);
+    }
+}
+
+@media (min-width: 768px) {
+    .table .td-actions {
+        width: 1%;
+        white-space: nowrap;
+    }
+
+    .um-actions {
+        flex-wrap: nowrap;
+        justify-content: flex-end;
+    }
+}

@@ -146,76 +146,66 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$pageTitle = 'Hesap Ayarları';
+$pageSubtitle = 'Ad, e-posta ve şifre';
+
 // Header'ı dahil et
 include 'includes/header.php';
 ?>
-
-<body class="<?php echo $themeClass; ?>">
+<body class="<?php echo $themeClass; ?>" data-page="user-settings">
     <div class="wrapper">
-        <!-- Sidebar Overlay -->
-        <div class="sidebar-overlay"></div>
-        
-        <!-- Sidebar -->
         <?php include 'includes/sidebar.php'; ?>
-        <!-- Page Content -->
-        <div id="content">
-            <nav class="navbar navbar-expand-lg navbar-light bg-light">
-                <div class="container-fluid">
-                    <button type="button" id="sidebarCollapse" class="btn btn-secondary">
-                        <i class="bi bi-list"></i>
-                    </button>
-                    <div class="ms-auto">
-                        <button type="button" id="themeToggle" class="btn btn-outline-secondary me-2">
-                            <i class="bi bi-moon-fill"></i>
-                        </button>
-                        <a href="auth/logout" class="btn btn-outline-danger">
-                            <i class="bi bi-box-arrow-right"></i> Çıkış Yap
-                        </a>
-                    </div>
-                </div>
-            </nav>
 
-            <div class="container-fluid p-4">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Kullanıcı Ayarları</h5>
+        <main id="content" tabindex="-1">
+            <?php include 'includes/topbar.php'; ?>
+
+            <div class="page page-narrow">
+                <form method="POST" action="">
+                    <section class="section" aria-labelledby="profileTitle">
+                        <div class="section-head">
+                            <h2 class="section-title" id="profileTitle">Profil</h2>
+                        </div>
+                        <div class="panel panel-pad">
+                            <div class="field">
+                                <label for="name" class="form-label">Ad soyad</label>
+                                <input type="text" class="form-control" id="name" name="name" value="<?php echo htmlspecialchars($userName); ?>" autocomplete="name" required>
+                            </div>
+                            <div class="field mb-0">
+                                <label for="email" class="form-label">E-posta</label>
+                                <input type="email" class="form-control" id="email" name="email" value="<?php echo htmlspecialchars($userEmail); ?>" autocomplete="email" inputmode="email" required>
+                                <div class="form-text">Giriş yaparken bu adresi kullanırsınız.</div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="section" aria-labelledby="passwordTitle">
+                        <div class="section-head">
+                            <h2 class="section-title" id="passwordTitle">Şifre değiştir</h2>
+                        </div>
+                        <div class="panel panel-pad">
+                            <p class="form-text mt-0 mb-3">Şifrenizi değiştirmeyecekseniz bu alanları boş bırakın.</p>
+                            <div class="field">
+                                <label for="current_password" class="form-label">Mevcut şifre</label>
+                                <input type="password" class="form-control" id="current_password" name="current_password" autocomplete="current-password">
+                            </div>
+                            <div class="field">
+                                <label for="new_password" class="form-label">Yeni şifre</label>
+                                <input type="password" class="form-control" id="new_password" name="new_password" autocomplete="new-password" aria-describedby="newPasswordHelp">
+                                <div class="form-text" id="newPasswordHelp">En az 6 karakter.</div>
+                            </div>
+                            <div class="field mb-0">
+                                <label for="confirm_password" class="form-label">Yeni şifre (tekrar)</label>
+                                <input type="password" class="form-control" id="confirm_password" name="confirm_password" autocomplete="new-password">
+                            </div>
+                        </div>
+                    </section>
+
+                    <div class="d-grid d-sm-flex justify-content-sm-end mt-4">
+                        <button type="submit" class="btn btn-primary">Değişiklikleri kaydet</button>
                     </div>
-                    <div class="card-body">
-                        <form method="POST" action="">
-                            <div class="mb-3">
-                                <label for="name" class="form-label">İsim</label>
-                                <input type="text" class="form-control" id="name" name="name" value="<?php echo htmlspecialchars($userName); ?>" required>
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="email" class="form-label">Email</label>
-                                <input type="email" class="form-control" id="email" name="email" value="<?php echo htmlspecialchars($userEmail); ?>" required>
-                            </div>
-                            
-                            <hr class="my-4">
-                            <h6 class="mb-3">Şifre Değiştir</h6>
-                            
-                            <div class="mb-3">
-                                <label for="current_password" class="form-label">Mevcut Şifre</label>
-                                <input type="password" class="form-control" id="current_password" name="current_password">
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="new_password" class="form-label">Yeni Şifre</label>
-                                <input type="password" class="form-control" id="new_password" name="new_password">
-                            </div>
-                            
-                            <div class="mb-3">
-                                <label for="confirm_password" class="form-label">Yeni Şifre (Tekrar)</label>
-                                <input type="password" class="form-control" id="confirm_password" name="confirm_password">
-                            </div>
-                            
-                            <button type="submit" class="btn btn-primary">Değişiklikleri Kaydet</button>
-                        </form>
-                    </div>
-                </div>
+                </form>
             </div>
-        </div>
+        </main>
     </div>
 
-<?php include 'includes/footer.php'; ?> 
+<?php include 'includes/footer.php'; ?>
