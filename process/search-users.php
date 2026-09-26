@@ -30,14 +30,15 @@ $search = $_GET['search'] ?? '';
 try {
     if (empty($search)) {
         // Tüm kullanıcıları getir
-        $stmt = $db->prepare("SELECT * FROM users ORDER BY created_at DESC LIMIT 50");
+        // Şifre özetleri ve token'lar tarayıcıya gönderilmez: yalnızca listede gereken alanlar
+        $stmt = $db->prepare("SELECT id, name, email, role, status, created_at FROM users ORDER BY created_at DESC LIMIT 50");
         $stmt->execute();
     } else {
         // Arama yap
         $searchTerm = '%' . $search . '%';
         $stmt = $db->prepare("
-            SELECT * FROM users 
-            WHERE name LIKE ? OR email LIKE ? 
+            SELECT id, name, email, role, status, created_at FROM users
+            WHERE name LIKE ? OR email LIKE ?
             ORDER BY created_at DESC 
             LIMIT 50
         ");

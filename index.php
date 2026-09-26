@@ -54,60 +54,67 @@ if (isset($_COOKIE['remember_token'])) {
     }
 }
 
+$themeClass = (isset($_COOKIE['theme']) && $_COOKIE['theme'] === 'dark') ? 'dark' : '';
+$pageTitle = 'Giriş';
+$themeColor = '#4B1D35';
+
+$gunler = ['Monday' => 'Pazartesi', 'Tuesday' => 'Salı', 'Wednesday' => 'Çarşamba', 'Thursday' => 'Perşembe', 'Friday' => 'Cuma', 'Saturday' => 'Cumartesi', 'Sunday' => 'Pazar'];
+$aylar = [1 => 'Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+
 include "includes/header.php";
 ?>
+<body class="<?php echo $themeClass; ?>">
+    <div class="login">
+        <section class="login-hero wool" aria-label="Randevu Yönetim Sistemi">
+            <span class="login-mark" aria-hidden="true"><i class="bi bi-clock"></i></span>
+            <time class="login-clock" data-live-clock datetime="<?php echo date('Y-m-d\TH:i'); ?>"><?php echo date('H:i'); ?></time>
+            <h1>Randevu Yönetim Sistemi</h1>
+            <p><?php echo date('j') . ' ' . $aylar[(int) date('n')] . ' ' . $gunler[date('l')]; ?></p>
+        </section>
 
-<body class="bg-light">
-    <div class="container">
-        <div class="row justify-content-center align-items-center min-vh-100">
-            <div class="col-md-6 col-lg-4">
-                <?php
-                if (isset($_SESSION['error'])) {
-                    echo '<div class="alert alert-danger alert-dismissible fade show" role="alert">
-                            ' . $_SESSION['error'] . '
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                          </div>';
-                    unset($_SESSION['error']);
-                }
-                if (isset($_SESSION['success'])) {
-                    echo '<div class="alert alert-success alert-dismissible fade show" role="alert"> 
-                            ' . $_SESSION['success'] . '
-                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                          </div>';
-                    unset($_SESSION['success']);
-                }
-                ?>
-                <div class="card shadow-lg">
-                    <div class="card-body p-5">
-                        <h2 class="text-center mb-4">Giriş Yap</h2>
-                        <form action="auth/login" method="POST" class="needs-validation" novalidate>
-                            <div class="mb-3">
-                                <label for="email" class="form-label">E-posta</label>
-                                <input type="email" class="form-control" id="email" name="email" required>
-                                <div class="invalid-feedback">
-                                    Lütfen geçerli bir e-posta adresi giriniz.
-                                </div>
-                            </div>
-                            <div class="mb-3">
-                                <label for="password" class="form-label">Şifre</label>
-                                <input type="password" class="form-control" id="password" name="password" required>
-                                <div class="invalid-feedback">
-                                    Lütfen şifrenizi giriniz.
-                                </div>
-                            </div>
-                            <div class="mb-3 form-check">
-                                <input type="checkbox" class="form-check-input" id="remember" name="remember">
-                                <label class="form-check-label" for="remember">Beni Hatırla</label>
-                            </div>
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-primary">Giriş Yap</button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+        <main class="login-body">
+            <?php if (isset($_SESSION['error'])): ?>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <?php echo htmlspecialchars($_SESSION['error']); ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
             </div>
-        </div>
+            <?php unset($_SESSION['error']); endif; ?>
+            <?php if (isset($_SESSION['success'])): ?>
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <?php echo htmlspecialchars($_SESSION['success']); ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Kapat"></button>
+            </div>
+            <?php unset($_SESSION['success']); endif; ?>
+
+            <h2>Giriş yap</h2>
+            <form action="auth/login" method="POST">
+                <div class="field">
+                    <label for="email" class="form-label">E-posta</label>
+                    <input type="email" class="form-control" id="email" name="email" autocomplete="username" inputmode="email" required>
+                </div>
+                <div class="field">
+                    <label for="password" class="form-label">Şifre</label>
+                    <input type="password" class="form-control" id="password" name="password" autocomplete="current-password" required>
+                </div>
+                <div class="field form-check">
+                    <input type="checkbox" class="form-check-input" id="remember" name="remember">
+                    <label class="form-check-label" for="remember">Bu cihazda oturumum açık kalsın</label>
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg btn-block">Giriş yap</button>
+            </form>
+        </main>
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    // Saat canlı kalsın
+    (function () {
+        var el = document.querySelector('[data-live-clock]');
+        if (!el) return;
+        setInterval(function () {
+            var d = new Date();
+            el.textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        }, 15000);
+    })();
+    </script>
 </body>
-</html> 
+</html>

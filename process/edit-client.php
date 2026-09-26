@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/database.php';
+require_once '../includes/phone.php';
 
 if (!isset($_SESSION['user_id'])) {
     header('Location: ../index');
@@ -24,8 +25,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     if (empty($phone)) {
         $errors[] = "Telefon alanı boş bırakılamaz.";
-    } elseif (!preg_match('/^[0-9]{10,11}$/', $phone)) {
-        $errors[] = "Geçersiz telefon numarası formatı. 10 veya 11 haneli bir numara giriniz.";
+    } else {
+        // Telefonu tek biçime çevir (ör. +90 537 221 23 23 → 05372212323)
+        $normalizedPhone = normalizePhone($phone);
+        if ($normalizedPhone === null) {
+            $errors[] = PHONE_FORMAT_HINT;
+        } else {
+            $phone = $normalizedPhone;
+        }
     }
 
     if (!empty($email) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {

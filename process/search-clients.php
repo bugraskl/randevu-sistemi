@@ -1,6 +1,7 @@
 <?php
 session_start();
 require_once '../config/database.php';
+require_once '../includes/phone.php';
 
 if (!isset($_SESSION['user_id'])) {
     http_response_code(401);
@@ -22,33 +23,38 @@ if (strlen($term) < 2) {
 }
 
 try {
-    // Önce toplam kayıt sayısını al
-    $countStmt = $db->prepare("
-        SELECT COUNT(*) 
-        FROM clients 
-        WHERE name LIKE ? OR phone LIKE ? OR email LIKE ? OR address LIKE ?
-    ");
-    
     $searchTerm = "%{$term}%";
-    $countStmt->execute([$searchTerm, $searchTerm, $searchTerm, $searchTerm]);
+    $where = "name LIKE ? OR phone LIKE ? OR email LIKE ? OR address LIKE ?";
+    $params = [$searchTerm, $searchTerm, $searchTerm, $searchTerm];
+
+    // Telefon hangi biçimde yazılırsa yazılsın (537 221, +90 537..., 0537...) kayıtlı numarayla eşleşsin
+    $phoneDigits = phoneSearchDigits($term);
+    if ($phoneDigits !== null) {
+        $where .= " OR phone LIKE ?";
+        $params[] = "%{$phoneDigits}%";
+    }
+
+    // Önce toplam kayıt sayısını al
+    $countStmt = $db->prepare("SELECT COUNT(*) FROM clients WHERE $where");
+    $countStmt->execute($params);
     $total_records = $countStmt->fetchColumn();
     $total_pages = ceil($total_records / $limit);
-    
+
     // Sonra sayfalı sonuçları al
     $stmt = $db->prepare("
         SELECT id, name, phone, email, address, notes, created_at
-        FROM clients 
-        WHERE name LIKE ? OR phone LIKE ? OR email LIKE ? OR address LIKE ?
+        FROM clients
+        WHERE $where
         ORDER BY name ASC
         LIMIT ? OFFSET ?
     ");
-    
-    $stmt->bindValue(1, $searchTerm, PDO::PARAM_STR);
-    $stmt->bindValue(2, $searchTerm, PDO::PARAM_STR);
-    $stmt->bindValue(3, $searchTerm, PDO::PARAM_STR);
-    $stmt->bindValue(4, $searchTerm, PDO::PARAM_STR);
-    $stmt->bindValue(5, $limit, PDO::PARAM_INT);
-    $stmt->bindValue(6, $offset, PDO::PARAM_INT);
+
+    $position = 1;
+    foreach ($params as $param) {
+        $stmt->bindValue($position++, $param, PDO::PARAM_STR);
+    }
+    $stmt->bindValue($position++, $limit, PDO::PARAM_INT);
+    $stmt->bindValue($position, $offset, PDO::PARAM_INT);
     $stmt->execute();
     
     $results = $stmt->fetchAll(PDO::FETCH_ASSOC);

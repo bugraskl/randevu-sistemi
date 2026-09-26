@@ -1,65 +1,5 @@
 document.addEventListener('DOMContentLoaded', function() {
-    // Sidebar toggle
-    const sidebar = document.getElementById('sidebar');
-    const sidebarCollapse = document.getElementById('sidebarCollapse');
-    const overlay = document.querySelector('.sidebar-overlay');
-
-    function toggleSidebar() {
-        sidebar.classList.toggle('active');
-        overlay.classList.toggle('active');
-    }
-
-    if (sidebarCollapse) {
-        sidebarCollapse.addEventListener('click', toggleSidebar);
-    }
-    
-    if (overlay) {
-        overlay.addEventListener('click', toggleSidebar);
-    }
-
-    // Mobil görünümde sidebar'ı varsayılan olarak kapalı yap
-    if (window.innerWidth <= 768) {
-        if (sidebar) sidebar.classList.remove('active');
-        if (overlay) overlay.classList.remove('active');
-    }
-
-    // Pencere boyutu değiştiğinde kontrol et
-    window.addEventListener('resize', function() {
-        if (window.innerWidth <= 768) {
-            if (sidebar) sidebar.classList.remove('active');
-            if (overlay) overlay.classList.remove('active');
-        } else {
-            if (sidebar) sidebar.classList.remove('active');
-            if (overlay) overlay.classList.remove('active');
-        }
-    });
-
-    // Tema değiştirme işlemleri
-    const themeToggle = document.getElementById('themeToggle');
-    if (themeToggle) {
-        const themeIcon = themeToggle.querySelector('i');
-        
-        // Kaydedilmiş temayı kontrol et ve ikonu güncelle
-        if (document.body.classList.contains('dark')) {
-            themeIcon.classList.remove('bi-moon-fill');
-            themeIcon.classList.add('bi-sun-fill');
-        }
-
-        // Tema değiştirme butonu tıklama olayı
-        themeToggle.addEventListener('click', function() {
-            if (document.body.classList.contains('dark')) {
-                document.body.classList.remove('dark');
-                themeIcon.classList.remove('bi-sun-fill');
-                themeIcon.classList.add('bi-moon-fill');
-                document.cookie = "theme=light; path=/; max-age=31536000";
-            } else {
-                document.body.classList.add('dark');
-                themeIcon.classList.remove('bi-moon-fill');
-                themeIcon.classList.add('bi-sun-fill');
-                document.cookie = "theme=dark; path=/; max-age=31536000";
-            }
-        });
-    }
+    // Not: Menü, sekme çubuğu ve tema değiştirme artık assets/js/app.js içinde.
 
     // Form doğrulama
     const forms = document.querySelectorAll('.needs-validation');
@@ -103,7 +43,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Sayfa bazlı initialization
     const currentPage = document.body.getAttribute('data-page') || window.location.pathname.split('/').pop().replace('.php', '');
-    
+
     switch(currentPage) {
         case 'clients':
             window.initializeClientPage();
@@ -117,6 +57,112 @@ document.addEventListener('DOMContentLoaded', function() {
         // Diğer sayfalar için case'ler eklenebilir
     }
 });
+
+// HTML kaçış (sunucudan gelen metinleri güvenle yazmak için)
+window.escapeHtml = function(value) {
+    return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+};
+
+// Telefonu okunaklı göster: 05372212323 → 0537 221 23 23 (includes/phone.php formatPhoneDisplay ile aynı)
+window.formatPhoneDisplay = function(phone) {
+    let d = String(phone == null ? '' : phone).replace(/\D+/g, '');
+    if (d.startsWith('00')) d = d.slice(2);
+    if (d.length >= 12 && d.startsWith('90')) d = d.slice(2);
+    if (d.length === 11 && d[0] === '0') d = d.slice(1);
+    if (!/^[2-58]\d{9}$/.test(d)) return String(phone == null ? '' : phone);
+    d = '0' + d;
+    return `${d.slice(0, 4)} ${d.slice(4, 7)} ${d.slice(7, 9)} ${d.slice(9, 11)}`;
+};
+
+// Randevu durumu → tek durum dili
+window.appointmentStatusMark = function(apt) {
+    const esc = window.escapeHtml;
+    const past = new Date(apt.appointment_date + 'T' + apt.appointment_time) < new Date();
+    if (apt.status === 'iptal') return '<span class="mark mark-cancelled">İptal edildi</span>';
+    if (past) return apt.payment_id ? '<span class="mark mark-paid">Ödendi</span>' : '<span class="mark mark-unpaid">Ödenmedi</span>';
+    // Randevular onay beklemez: gelecekteki randevu için ayrı bir durum işareti yok
+    return '';
+};
+
+// ---------------------------------------------------------------------------
+// Randevu düzenleme / silme: tek ortak panel, window.appointments verisiyle dolar
+// ---------------------------------------------------------------------------
+const TR_MONTHS = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+const TR_DAYS = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+
+function todayKey() {
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+}
+
+function longDate(key) {
+    const [y, m, d] = key.split('-').map(Number);
+    const date = new Date(y, m - 1, d);
+    return `${d} ${TR_MONTHS[m - 1]} ${TR_DAYS[date.getDay()]}`;
+}
+
+window.findAppointment = function(id) {
+    return (window.appointments || []).find(a => String(a.id) === String(id)) || null;
+};
+
+// Geçmiş tarihli randevular düzenleme formunda kaydedilemez (sunucu reddeder)
+window.canEditAppointment = function(apt) {
+    return !!apt && apt.appointment_date >= todayKey() && !!document.getElementById('editAppointmentModal');
+};
+
+function fillAppointmentSummary(prefix, apt) {
+    document.querySelectorAll(`[data-${prefix}-time]`).forEach(el => { el.textContent = apt.formatted_time || String(apt.appointment_time).slice(0, 5); });
+    document.querySelectorAll(`[data-${prefix}-name]`).forEach(el => { el.textContent = apt.client_name || ''; });
+    document.querySelectorAll(`[data-${prefix}-date]`).forEach(el => { el.textContent = longDate(apt.appointment_date); });
+}
+
+window.openAppointmentEditor = function(id) {
+    const apt = window.findAppointment(id);
+    if (!window.canEditAppointment(apt)) {
+        window.showToastMessage('Geçmiş tarihli randevular düzenlenemez.', 'warning');
+        return;
+    }
+    const modal = document.getElementById('editAppointmentModal');
+    fillAppointmentSummary('edit', apt);
+    fillAppointmentSummary('delete', apt);
+
+    const time = String(apt.appointment_time).slice(0, 5);
+    const [hh, mm] = time.split(':');
+    document.getElementById('editAppointmentId').value = apt.id;
+    document.getElementById('deleteAppointmentId').value = apt.id;
+    document.getElementById('editAppointmentClient').value = String(apt.client_id);
+    document.getElementById('editAppointmentDate').value = apt.appointment_date;
+    document.getElementById('editAppointmentHour').value = hh;
+    const minuteSelect = document.getElementById('editAppointmentMinute');
+    if (!Array.from(minuteSelect.options).some(o => o.value === mm)) {
+        minuteSelect.add(new Option(mm, mm));
+    }
+    minuteSelect.value = mm;
+    document.getElementById('editAppointmentNotes').value = apt.notes || '';
+
+    const tel = modal.querySelector('[data-edit-tel]');
+    const digits = String(apt.client_phone || '').replace(/[^0-9+]/g, '');
+    tel.hidden = !digits;
+    tel.href = digits ? 'tel:' + digits : '#';
+
+    bootstrap.Modal.getOrCreateInstance(modal).show();
+};
+
+window.openAppointmentDelete = function(id) {
+    const apt = window.findAppointment(id);
+    if (!window.canEditAppointment(apt)) {
+        window.showToastMessage('Geçmiş tarihli randevular bu ekrandan silinemez.', 'warning');
+        return;
+    }
+    fillAppointmentSummary('delete', apt);
+    document.getElementById('deleteAppointmentId').value = apt.id;
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('deleteAppointmentModal')).show();
+};
 
 // Toast mesajları için global fonksiyon
 window.showToastMessage = function(message, type) {
@@ -136,7 +182,7 @@ window.showSessionMessages = function() {
     const successMsg = window.sessionSuccess;
     const errorMsg = window.sessionError;
     const warningMsg = window.sessionWarning;
-    
+
     if (successMsg) {
         window.showToastMessage(successMsg, 'success');
     }
@@ -152,17 +198,17 @@ window.showSessionMessages = function() {
 window.searchTableRows = function(searchTerm, tableSelector = 'tbody tr') {
     const rows = document.querySelectorAll(tableSelector);
     const term = searchTerm.toLowerCase().trim();
-    
+
     rows.forEach(row => {
         let found = false;
         const cells = row.querySelectorAll('td');
-        
+
         cells.forEach(cell => {
             if (cell.textContent.toLowerCase().includes(term)) {
                 found = true;
             }
         });
-        
+
         row.style.display = found ? '' : 'none';
     });
 };
@@ -173,7 +219,7 @@ window.resetForm = function(formSelector) {
     if (form) {
         form.reset();
         form.classList.remove('was-validated');
-        
+
         // Hata mesajlarını temizle
         const invalidInputs = form.querySelectorAll('.is-invalid');
         invalidInputs.forEach(input => {
@@ -185,7 +231,7 @@ window.resetForm = function(formSelector) {
 // Loading state yönetimi
 window.setLoadingState = function(button, loading = true) {
     if (!button) return;
-    
+
     if (loading) {
         button.disabled = true;
         const originalText = button.getAttribute('data-original-text') || button.innerHTML;
@@ -233,13 +279,17 @@ window.formatPhone = function(input) {
 
 // Client arama fonksiyonu
 window.performClientSearch = function(page = 1) {
+    const esc = window.escapeHtml;
     const searchInput = document.getElementById('searchInput');
     const searchButton = document.getElementById('searchButton');
     const searchResultsModal = document.getElementById('searchResultsModal');
     const searchResults = document.getElementById('searchResults');
-    
+
     if (!searchInput || !searchResults) return;
-    
+
+    // Tıklama olayından gelen parametreyi yok say
+    if (typeof page !== 'number') page = 1;
+
     const searchTerm = searchInput.value.trim();
     if (searchTerm.length < 2) {
         window.showToastMessage('Lütfen en az 2 karakter giriniz.', 'warning');
@@ -258,87 +308,79 @@ window.performClientSearch = function(page = 1) {
                 // Modal başlığını güncelle
                 const modalTitle = searchResultsModal.querySelector('.modal-title');
                 if (modalTitle) {
-                    modalTitle.textContent = `"${data.search_term}" için ${data.pagination.total_records} sonuç bulundu`;
+                    modalTitle.textContent = `“${data.search_term}” için ${data.pagination.total_records} sonuç`;
                 }
 
-                // İlk sayfa ise sonuçları temizle
-                if (page === 1) {
-                    searchResults.innerHTML = '';
-                }
-                
+                // Sonuçları temizle
+                searchResults.innerHTML = '';
+
                 if (data.clients.length === 0 && page === 1) {
                     searchResults.innerHTML = `
-                        <div class="text-center py-4">
-                            <i class="bi bi-person-x fs-1 text-muted mb-3"></i>
-                            <h5 class="text-muted">Danışan bulunamadı</h5>
-                            <p class="text-muted mb-0">"${data.search_term}" için sonuç bulunamadı</p>
+                        <div class="empty">
+                            <p class="empty-title">Danışan bulunamadı</p>
+                            <p>“${esc(data.search_term)}” ile eşleşen bir danışan yok. Adı ya da telefonun bir kısmıyla tekrar deneyin.</p>
                         </div>
                     `;
                 } else {
+                    const list = document.createElement('div');
+                    list.className = 'list';
                     data.clients.forEach(client => {
                         const item = document.createElement('div');
-                        item.className = 'list-group-item';
+                        item.className = 'row-item no-lead';
                         item.innerHTML = `
-                            <div class="d-flex w-100 justify-content-between align-items-start">
-                                <div class="flex-grow-1">
-                                    <div class="d-flex align-items-center mb-2">
-                                        <h5 class="mb-0 me-3">${client.name}</h5>
-                                        <span class="badge bg-info">${client.appointment_count} randevu</span>
-                                    </div>
-                                    <p class="mb-1">
-                                        <i class="bi bi-telephone me-1"></i> ${client.phone}
-                                        ${client.email ? `<span class="ms-3"><i class="bi bi-envelope me-1"></i> ${client.email}</span>` : ''}
-                                    </p>
-                                    ${client.address ? `<p class="mb-1 text-muted"><i class="bi bi-geo-alt me-1"></i> ${client.address}</p>` : ''}
-                                    ${client.notes ? `<p class="mb-1 text-muted"><i class="bi bi-journal-text me-1"></i> ${client.notes}</p>` : ''}
-                                    <small class="text-muted">Kayıt tarihi: ${client.created_at_formatted}</small>
-                                </div>
-                                <div class="btn-group ms-3" role="group">
-                                    <a href="client-details?id=${client.id}" class="btn btn-sm btn-dark" title="Detaylar">
-                                        <i class="bi bi-eye"></i>
-                                    </a>
-                                    <button type="button" class="btn btn-sm btn-primary" onclick="editClientFromSearch(${client.id})" title="Düzenle">
-                                        <i class="bi bi-pencil"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-danger" onclick="deleteClientFromSearch(${client.id}, '${client.name}')" title="Sil">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </div>
+                            <a class="row-main text-decoration-none" href="client-details?id=${encodeURIComponent(client.id)}">
+                                <p class="row-title"><span>${esc(client.name)}</span></p>
+                                <p class="row-meta tnum">${esc(window.formatPhoneDisplay(client.phone))}${client.email ? ' · ' + esc(client.email) : ''}</p>
+                            </a>
+                            <div class="row-trail">
+                                <span class="badge bg-secondary">${esc(client.appointment_count)} randevu</span>
+                            </div>
+                            <div class="row-actions">
+                                <a href="client-details?id=${encodeURIComponent(client.id)}" class="btn btn-sm btn-secondary">Kartı aç</a>
+                                <button type="button" class="btn btn-sm btn-secondary" data-edit-client="${esc(client.id)}">Düzenle</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" data-delete-client="${esc(client.id)}" data-client-name="${esc(client.name)}">Sil</button>
                             </div>
                         `;
-                        searchResults.appendChild(item);
+                        list.appendChild(item);
                     });
-                    
+                    searchResults.appendChild(list);
+
+                    list.querySelectorAll('[data-edit-client]').forEach(btn => {
+                        btn.addEventListener('click', () => window.editClientFromSearch(btn.getAttribute('data-edit-client')));
+                    });
+                    list.querySelectorAll('[data-delete-client]').forEach(btn => {
+                        btn.addEventListener('click', () => window.deleteClientFromSearch(btn.getAttribute('data-delete-client'), btn.getAttribute('data-client-name')));
+                    });
+
                     // Sayfalama ekle
                     if (data.pagination.total_pages > 1) {
                         const paginationDiv = document.createElement('div');
-                        paginationDiv.className = 'mt-3 d-flex justify-content-between align-items-center';
+                        paginationDiv.className = 'mt-3 d-flex justify-content-between align-items-center gap-2';
                         paginationDiv.innerHTML = `
-                            <div class="text-muted">
-                                Sayfa ${data.pagination.current_page} / ${data.pagination.total_pages} 
-                                (Toplam ${data.pagination.total_records} kayıt)
-                            </div>
-                            <div class="btn-group" role="group">
-                                ${data.pagination.has_prev ? 
-                                    `<button type="button" class="btn btn-sm btn-outline-primary" onclick="window.performClientSearch(${data.pagination.current_page - 1})">
-                                        <i class="bi bi-chevron-left"></i> Önceki
+                            <small class="tnum">Sayfa ${data.pagination.current_page} / ${data.pagination.total_pages}</small>
+                            <div class="d-flex gap-2">
+                                ${data.pagination.has_prev ?
+                                    `<button type="button" class="btn btn-sm btn-secondary" data-page-to="${data.pagination.current_page - 1}">
+                                        <i class="bi bi-chevron-left" aria-hidden="true"></i> Önceki
                                     </button>` : ''
                                 }
-                                ${data.pagination.has_next ? 
-                                    `<button type="button" class="btn btn-sm btn-outline-primary" onclick="window.performClientSearch(${data.pagination.current_page + 1})">
-                                        Sonraki <i class="bi bi-chevron-right"></i>
+                                ${data.pagination.has_next ?
+                                    `<button type="button" class="btn btn-sm btn-secondary" data-page-to="${data.pagination.current_page + 1}">
+                                        Sonraki <i class="bi bi-chevron-right" aria-hidden="true"></i>
                                     </button>` : ''
                                 }
                             </div>
                         `;
+                        paginationDiv.querySelectorAll('[data-page-to]').forEach(btn => {
+                            btn.addEventListener('click', () => window.performClientSearch(parseInt(btn.getAttribute('data-page-to'), 10)));
+                        });
                         searchResults.appendChild(paginationDiv);
                     }
                 }
-                
+
                 // Modal göster (sadece ilk sayfa için)
                 if (page === 1 && searchResultsModal && typeof bootstrap !== 'undefined') {
-                    const modal = new bootstrap.Modal(searchResultsModal);
-                    modal.show();
+                    bootstrap.Modal.getOrCreateInstance(searchResultsModal).show();
                 }
             } else {
                 window.showToastMessage(data.error || data.message || 'Arama sırasında bir hata oluştu.', 'error');
@@ -360,33 +402,33 @@ window.initializeClientPage = function() {
     const searchInput = document.getElementById('searchInput');
     const searchButton = document.getElementById('searchButton');
     let searchTimeout;
-    
+
     if (searchButton) {
-        searchButton.addEventListener('click', window.performClientSearch);
+        searchButton.addEventListener('click', () => window.performClientSearch(1));
     }
-    
+
     if (searchInput) {
         // Enter tuşu ile arama
         searchInput.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
-                window.performClientSearch();
+                window.performClientSearch(1);
             }
         });
-        
+
         // Anlık arama (typing sırasında)
         searchInput.addEventListener('input', function() {
             clearTimeout(searchTimeout);
             const searchTerm = this.value.trim();
-            
+
             // Eğer 2 karakterden azsa arama yapma
             if (searchTerm.length < 2) {
                 return;
             }
-            
+
             // 500ms bekle, ardından arama yap
             searchTimeout = setTimeout(() => {
-                window.performClientSearch();
+                window.performClientSearch(1);
             }, 500);
         });
     }
@@ -396,7 +438,7 @@ window.initializeClientPage = function() {
 window.initializeAppointmentsPage = function() {
     const searchButton = document.getElementById('searchButton');
     const searchDate = document.getElementById('searchDate');
-    
+
     // Tarih arama
     if (searchButton && searchDate) {
         searchButton.addEventListener('click', function() {
@@ -407,7 +449,7 @@ window.initializeAppointmentsPage = function() {
                 window.showToastMessage('Lütfen bir tarih seçiniz.', 'warning');
             }
         });
-        
+
         // Enter tuşu ile arama
         searchDate.addEventListener('keypress', function(e) {
             if (e.key === 'Enter') {
@@ -416,22 +458,41 @@ window.initializeAppointmentsPage = function() {
             }
         });
     }
-    
+
+    // Liste satırı → ortak düzenleme paneli
+    document.querySelectorAll('[data-edit-appointment]').forEach(row => {
+        row.addEventListener('click', () => window.openAppointmentEditor(row.getAttribute('data-edit-appointment')));
+    });
+
+    // Sonraki günler (14 günden sonrası) katlı gelir
+    const laterToggle = document.querySelector('[data-later-toggle]');
+    const laterDays = document.getElementById('laterDays');
+    if (laterToggle && laterDays) {
+        laterToggle.addEventListener('click', () => {
+            laterDays.hidden = false;
+            laterToggle.setAttribute('aria-expanded', 'true');
+            laterToggle.closest('[data-later-toggle-wrap]').remove();
+        });
+    }
+
     // Takvim işlemleri
     const calendarDays = document.getElementById('calendarDays');
     const currentMonthElement = document.getElementById('currentMonth');
     const prevMonthButton = document.getElementById('prevMonth');
     const nextMonthButton = document.getElementById('nextMonth');
-    
+
     if (calendarDays && currentMonthElement && prevMonthButton && nextMonthButton) {
         window.initializeCalendar();
     }
-    
+
     // Görünüm değiştirme
     window.changeView = function(view) {
         const url = new URL(window.location.href);
         url.searchParams.set('view', view);
-        window.history.pushState({}, '', url);
+        url.searchParams.delete('action');
+        window.history.replaceState({}, '', url);
+        const viewInput = document.querySelector('#addAppointmentModal input[name="view"]');
+        if (viewInput) viewInput.value = view;
     };
 
     // Sayfa yüklendiğinde URL'deki görünümü kontrol et
@@ -448,15 +509,15 @@ window.initializeAppointmentsPage = function() {
 
 // Randevu arama fonksiyonu
 window.performAppointmentSearch = function(date) {
+    const esc = window.escapeHtml;
     const searchButton = document.getElementById('searchButton');
     const searchResultsModal = document.getElementById('searchResultsModal');
     const searchResults = document.getElementById('searchResults');
-    
+
     if (!searchResults) return;
 
     // Loading göster
     window.setLoadingState(searchButton, true);
-    searchButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Aranıyor...';
 
     fetch(`process/search-appointments?date=${encodeURIComponent(date)}`)
         .then(response => response.json())
@@ -465,55 +526,52 @@ window.performAppointmentSearch = function(date) {
                 // Modal başlığını güncelle
                 const modalTitle = searchResultsModal.querySelector('.modal-title');
                 if (modalTitle) {
-                    modalTitle.textContent = `${data.formatted_date} ${data.day_name} - Randevular`;
+                    modalTitle.textContent = `${data.formatted_date} ${data.day_name}`;
                 }
 
                 // Arama sonuçlarını göster
                 searchResults.innerHTML = '';
-                
+
                 if (data.appointments.length === 0) {
                     searchResults.innerHTML = `
-                        <div class="text-center py-4">
-                            <i class="bi bi-calendar-x fs-1 text-muted mb-3"></i>
-                            <h5 class="text-muted">Bu tarihte randevu bulunamadı</h5>
-                            <p class="text-muted mb-0">${data.formatted_date} ${data.day_name}</p>
+                        <div class="empty">
+                            <p class="empty-title">Bu tarihte randevu yok</p>
+                            <p>${esc(data.formatted_date)} ${esc(data.day_name)} için kayıtlı seans bulunmuyor.</p>
                         </div>
                     `;
                 } else {
+                    const list = document.createElement('div');
+                    list.className = 'list';
                     data.appointments.forEach(appointment => {
-                        const appointmentElement = document.createElement('div');
-                        appointmentElement.className = 'list-group-item';
-                        appointmentElement.innerHTML = `
-                            <div class="d-flex w-100 justify-content-between align-items-center">
-                                <div>
-                                    <div class="d-flex align-items-center mb-2">
-                                        <h6 class="mb-0 me-3">${appointment.formatted_time}</h6>
-                                        ${appointment.status_badge}
-                                    </div>
-                                    <h5 class="mb-1">${appointment.client_name}</h5>
-                                    <p class="mb-1">
-                                        <i class="bi bi-telephone me-1"></i> ${appointment.client_phone}
-                                    </p>
-                                    ${appointment.notes ? `<p class="mb-1 text-muted"><i class="bi bi-journal-text me-1"></i> ${appointment.notes}</p>` : ''}
-                                </div>
-                                <div class="btn-group" role="group">
-                                    <button type="button" class="btn btn-sm btn-primary" onclick="editAppointmentFromSearch(${appointment.id})">
-                                        <i class="bi bi-pencil"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-sm btn-danger" onclick="deleteAppointmentFromSearch(${appointment.id}, '${appointment.formatted_date}', '${appointment.formatted_time}', '${appointment.client_name}')">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
-                                </div>
+                        const item = document.createElement('div');
+                        item.className = 'row-item';
+                        item.innerHTML = `
+                            <span class="row-time">${esc(appointment.formatted_time)}</span>
+                            <div class="row-main">
+                                <p class="row-title"><span>${esc(appointment.client_name)}</span></p>
+                                <p class="row-meta tnum">${esc(window.formatPhoneDisplay(appointment.client_phone))}${appointment.notes ? ' · ' + esc(appointment.notes) : ''}</p>
+                            </div>
+                            <div class="row-trail"></div>
+                            <div class="row-actions">
+                                <button type="button" class="btn btn-sm btn-secondary" data-edit-appointment="${esc(appointment.id)}">Düzenle</button>
+                                <button type="button" class="btn btn-sm btn-outline-danger" data-delete-appointment="${esc(appointment.id)}">Sil</button>
                             </div>
                         `;
-                        searchResults.appendChild(appointmentElement);
+                        list.appendChild(item);
+                    });
+                    searchResults.appendChild(list);
+
+                    list.querySelectorAll('[data-edit-appointment]').forEach(btn => {
+                        btn.addEventListener('click', () => window.editAppointmentFromSearch(btn.getAttribute('data-edit-appointment')));
+                    });
+                    list.querySelectorAll('[data-delete-appointment]').forEach(btn => {
+                        btn.addEventListener('click', () => window.deleteAppointmentFromSearch(btn.getAttribute('data-delete-appointment')));
                     });
                 }
-                
+
                 // Modal göster
                 if (searchResultsModal && typeof bootstrap !== 'undefined') {
-                    const modal = new bootstrap.Modal(searchResultsModal);
-                    modal.show();
+                    bootstrap.Modal.getOrCreateInstance(searchResultsModal).show();
                 }
             } else {
                 window.showToastMessage(data.error || 'Arama sırasında bir hata oluştu.', 'error');
@@ -525,251 +583,305 @@ window.performAppointmentSearch = function(date) {
         })
         .finally(() => {
             window.setLoadingState(searchButton, false);
-            searchButton.innerHTML = '<i class="bi bi-search"></i> Ara';
         });
 };
 
+// Bir modalı, açık olan arama modalı kapandıktan sonra aç
+function openModalAfterSearch(modalId, fallback) {
+    const searchEl = document.getElementById('searchResultsModal');
+    const searchModal = searchEl ? bootstrap.Modal.getInstance(searchEl) : null;
+    const open = () => {
+        const target = document.getElementById(modalId);
+        if (target && typeof bootstrap !== 'undefined') {
+            bootstrap.Modal.getOrCreateInstance(target).show();
+        } else if (typeof fallback === 'function') {
+            fallback();
+        }
+    };
+    if (searchModal && searchEl.classList.contains('show')) {
+        searchEl.addEventListener('hidden.bs.modal', open, { once: true });
+        searchModal.hide();
+    } else {
+        open();
+    }
+}
+
+// Arama modalı kapandıktan sonra bir işlem çalıştır
+function afterSearchClosed(fn) {
+    const searchEl = document.getElementById('searchResultsModal');
+    const searchModal = searchEl ? bootstrap.Modal.getInstance(searchEl) : null;
+    if (searchModal && searchEl.classList.contains('show')) {
+        searchEl.addEventListener('hidden.bs.modal', fn, { once: true });
+        searchModal.hide();
+    } else {
+        fn();
+    }
+}
+
 // Arama modalından randevu düzenleme
 window.editAppointmentFromSearch = function(appointmentId) {
-    // Mevcut modal'ı kapat
-    const searchModal = bootstrap.Modal.getInstance(document.getElementById('searchResultsModal'));
-    if (searchModal) {
-        searchModal.hide();
-    }
-    
-    // Düzenleme modalını aç
-    setTimeout(() => {
-        const editModal = document.getElementById('editAppointmentModal' + appointmentId);
-        if (editModal && typeof bootstrap !== 'undefined') {
-            const modal = new bootstrap.Modal(editModal);
-            modal.show();
-        }
-    }, 300);
+    afterSearchClosed(() => window.openAppointmentEditor(appointmentId));
 };
 
 // Arama modalından randevu silme
-window.deleteAppointmentFromSearch = function(appointmentId, date, time, clientName) {
-    // Mevcut modal'ı kapat
-    const searchModal = bootstrap.Modal.getInstance(document.getElementById('searchResultsModal'));
-    if (searchModal) {
-        searchModal.hide();
-    }
-    
-    // Silme onay modalını aç
-    setTimeout(() => {
-        const deleteModal = document.getElementById('deleteAppointmentModal' + appointmentId);
-        if (deleteModal && typeof bootstrap !== 'undefined') {
-            const modal = new bootstrap.Modal(deleteModal);
-            modal.show();
-        }
-    }, 300);
+window.deleteAppointmentFromSearch = function(appointmentId) {
+    afterSearchClosed(() => window.openAppointmentDelete(appointmentId));
 };
 
 // Takvim başlatma fonksiyonu
 window.initializeCalendar = function() {
+    const esc = window.escapeHtml;
     const calendarDays = document.getElementById('calendarDays');
     const currentMonthElement = document.getElementById('currentMonth');
     const prevMonthButton = document.getElementById('prevMonth');
     const nextMonthButton = document.getElementById('nextMonth');
-    
-    let currentDate = new Date();
-    let currentMonth = currentDate.getMonth();
-    let currentYear = currentDate.getFullYear();
+    const dayDetail = document.getElementById('calendarDayDetail');
+
+    const monthNames = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
+                        'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+    const dayNames = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+
+    const today = new Date();
+    let currentMonth = today.getMonth();
+    let currentYear = today.getFullYear();
+    let selectedKey = toKey(today);
+
+    function toKey(date) {
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    }
+
+    function appointmentsOn(key) {
+        return (window.appointments || [])
+            .filter(apt => apt.appointment_date === key)
+            .sort((a, b) => a.appointment_time.localeCompare(b.appointment_time));
+    }
+
+    function getAppointmentStatus(appointment) {
+        const aptDateTime = new Date(appointment.appointment_date + 'T' + appointment.appointment_time);
+        const now = new Date();
+
+        if (aptDateTime < now) return 'past';
+        if (aptDateTime.toDateString() === now.toDateString()) return 'today';
+        return 'future';
+    }
+
+    function showAppointmentDetails(appointment) {
+        window.openAppointmentEditor(appointment.id);
+    }
+
+    function openAddFor(dateStr) {
+        const dateInput = document.getElementById('date');
+        if (dateInput) dateInput.value = dateStr;
+        const modal = document.getElementById('addAppointmentModal');
+        if (modal && typeof bootstrap !== 'undefined') {
+            bootstrap.Modal.getOrCreateInstance(modal).show();
+        }
+    }
+
+    // Seçilen günün randevularını takvimin altında listele (telefonda asıl görünüm)
+    function renderDayDetail(key) {
+        if (!dayDetail) return;
+        const [y, m, d] = key.split('-').map(Number);
+        const date = new Date(y, m - 1, d);
+        const items = appointmentsOn(key);
+        const isPastDay = key < toKey(new Date());
+
+        let html = `<div class="list-day">${d} ${monthNames[m - 1]} ${dayNames[date.getDay()]}<span>${items.length ? items.length + ' seans' : ''}</span></div>`;
+        if (items.length === 0) {
+            html += `<div class="empty">
+                <p class="empty-title">Bu günde seans yok</p>
+                ${isPastDay ? '<p>Geçmiş bir gün seçtiniz.</p>' : `<p>Bu güne randevu eklemek için aşağıdaki düğmeyi kullanın.</p><button type="button" class="btn btn-primary" data-add-on="${key}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Bu güne randevu ekle</button>`}
+            </div>`;
+        } else {
+            html += '<div class="list">';
+            items.forEach(apt => {
+                const past = getAppointmentStatus(apt) === 'past';
+                const editable = window.canEditAppointment(apt);
+                const cancelled = apt.status === 'iptal';
+                const tag = editable ? 'button type="button"' : 'div';
+                const closeTag = editable ? 'button' : 'div';
+                html += `<${tag} class="row-item${past ? ' is-past' : ''}${cancelled ? ' is-cancelled' : ''}" ${editable ? `data-edit-id="${esc(apt.id)}"` : ''}>
+                    <span class="row-time">${esc(apt.formatted_time)}</span>
+                    <span class="row-main">
+                        <span class="row-title"><span>${esc(apt.client_name)}</span></span>
+                        <span class="row-meta d-block">${(() => { const m = window.appointmentStatusMark(apt); return m ? m + ' · ' : ''; })()}<span class="tnum">${esc(window.formatPhoneDisplay(apt.client_phone || ''))}</span></span>
+                    </span>
+                    <span class="row-trail">${editable ? '<i class="bi bi-chevron-right row-chevron" aria-hidden="true"></i>' : ''}</span>
+                </${closeTag}>`;
+            });
+            html += '</div>';
+            if (!isPastDay) {
+                html += `<div class="mt-3"><button type="button" class="btn btn-secondary btn-block" data-add-on="${key}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Bu güne randevu ekle</button></div>`;
+            }
+        }
+        dayDetail.innerHTML = html;
+
+        dayDetail.querySelectorAll('[data-edit-id]').forEach(el => {
+            el.addEventListener('click', () => {
+                const apt = items.find(a => String(a.id) === el.getAttribute('data-edit-id'));
+                if (apt) showAppointmentDetails(apt);
+            });
+        });
+        dayDetail.querySelectorAll('[data-add-on]').forEach(el => {
+            el.addEventListener('click', () => openAddFor(el.getAttribute('data-add-on')));
+        });
+    }
 
     function updateCalendar() {
         const firstDay = new Date(currentYear, currentMonth, 1);
         const lastDay = new Date(currentYear, currentMonth + 1, 0);
         const startingDay = firstDay.getDay() || 7; // Pazartesi = 1, Pazar = 7
         const monthLength = lastDay.getDate();
-        
-        // Ay adını güncelle
-        const monthNames = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 
-                          'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+
         currentMonthElement.textContent = `${monthNames[currentMonth]} ${currentYear}`;
-        
-        // Takvim günlerini temizle
         calendarDays.innerHTML = '';
-        
+
         // Önceki ayın günlerini ekle
         const prevMonthLastDay = new Date(currentYear, currentMonth, 0).getDate();
         for (let i = startingDay - 1; i > 0; i--) {
-            const dayElement = createDayElement(prevMonthLastDay - i + 1, 'other-month');
-            calendarDays.appendChild(dayElement);
+            calendarDays.appendChild(createDayElement(prevMonthLastDay - i + 1, 'other-month'));
         }
-        
+
         // Mevcut ayın günlerini ekle
         for (let i = 1; i <= monthLength; i++) {
             const dayDate = new Date(currentYear, currentMonth, i);
-            const isToday = dayDate.toDateString() === new Date().toDateString();
-            const dayElement = createDayElement(i, isToday ? 'today' : '');
-            
-            // O güne ait randevuları ekle
-            if (window.appointments) {
-                const dayAppointments = window.appointments.filter(apt => {
-                    const aptDate = new Date(apt.appointment_date);
-                    return aptDate.getDate() === i && 
-                           aptDate.getMonth() === currentMonth && 
-                           aptDate.getFullYear() === currentYear;
-                });
-                
-                if (dayAppointments.length > 0) {
-                    dayElement.classList.add('has-appointments');
-                    dayAppointments.forEach(apt => {
-                        const aptElement = document.createElement('div');
-                        aptElement.className = `appointment-item ${getAppointmentStatus(apt)}`;
-                        aptElement.textContent = `${apt.formatted_time} - ${apt.client_name}`;
-                        aptElement.onclick = () => showAppointmentDetails(apt);
-                        dayElement.appendChild(aptElement);
+            const key = toKey(dayDate);
+            const isToday = key === toKey(new Date());
+            const dayElement = createDayElement(i, isToday ? 'today' : '', key);
+            if (key === selectedKey) dayElement.classList.add('is-selected');
+
+            const dayAppointments = appointmentsOn(key);
+            if (dayAppointments.length > 0) {
+                dayElement.classList.add('has-appointments');
+                const dots = document.createElement('span');
+                dots.className = 'apt-dots';
+                dayAppointments.forEach(apt => {
+                    const aptElement = document.createElement('span');
+                    aptElement.className = `appointment-item ${getAppointmentStatus(apt)}`;
+                    aptElement.textContent = `${apt.formatted_time} ${apt.client_name}`;
+                    aptElement.title = `${apt.formatted_time} · ${apt.client_name}`;
+                    aptElement.addEventListener('click', (e) => {
+                        // Masaüstünde doğrudan randevuyu aç
+                        if (window.matchMedia('(min-width: 992px)').matches && window.canEditAppointment(apt)) {
+                            e.stopPropagation();
+                            showAppointmentDetails(apt);
+                        }
                     });
-                }
+                    dots.appendChild(aptElement);
+                });
+                dayElement.appendChild(dots);
+                dayElement.setAttribute('aria-label', `${i} ${monthNames[currentMonth]}, ${dayAppointments.length} seans`);
+            } else {
+                dayElement.setAttribute('aria-label', `${i} ${monthNames[currentMonth]}, seans yok`);
             }
-            
+
             calendarDays.appendChild(dayElement);
         }
-        
+
         // Sonraki ayın günlerini ekle
-        const remainingDays = 42 - (startingDay - 1 + monthLength); // 6 satır için 42 gün
+        const remainingDays = (7 - ((startingDay - 1 + monthLength) % 7)) % 7;
         for (let i = 1; i <= remainingDays; i++) {
-            const dayElement = createDayElement(i, 'other-month');
-            calendarDays.appendChild(dayElement);
+            calendarDays.appendChild(createDayElement(i, 'other-month'));
         }
+
+        renderDayDetail(selectedKey);
     }
-    
-    function createDayElement(day, className) {
-        const div = document.createElement('div');
-        div.className = `calendar-day ${className}`;
-        
-        // Gün numarası
-        const dayNumber = document.createElement('div');
+
+    function createDayElement(day, className, key) {
+        const isOther = className.includes('other-month');
+        const el = document.createElement(isOther ? 'div' : 'div');
+        el.className = `calendar-day ${className}`;
+
+        const dayNumber = document.createElement('span');
         dayNumber.className = 'calendar-day-number';
         dayNumber.textContent = day;
-        div.appendChild(dayNumber);
-        
-        // Boş günler için randevu ekleme butonu
-        if (!className.includes('other-month')) {
-            const addButton = document.createElement('button');
-            addButton.className = 'btn btn-sm btn-outline-secondary add-appointment-btn';
-            addButton.innerHTML = '<i class="bi bi-plus"></i>';
-            addButton.style.position = 'absolute';
-            addButton.style.bottom = '5px';
-            addButton.style.right = '5px';
-            addButton.style.padding = '2px 6px';
-            addButton.style.fontSize = '0.8rem';
-            
-            // Tarih formatını oluştur
-            const year = currentYear;
-            const month = (currentMonth + 1).toString().padStart(2, '0');
-            const dayStr = day.toString().padStart(2, '0');
-            const dateStr = `${year}-${month}-${dayStr}`;
-            
-            addButton.onclick = (e) => {
-                e.stopPropagation();
-                const dateInput = document.getElementById('date');
-                if (dateInput) dateInput.value = dateStr;
-                const modal = document.getElementById('addAppointmentModal');
-                if (modal && typeof bootstrap !== 'undefined') {
-                    const bsModal = new bootstrap.Modal(modal);
-                    bsModal.show();
-                }
+        el.appendChild(dayNumber);
+
+        if (!isOther) {
+            el.setAttribute('role', 'button');
+            el.setAttribute('tabindex', '0');
+            el.dataset.date = key;
+
+            const select = () => {
+                selectedKey = key;
+                calendarDays.querySelectorAll('.calendar-day.is-selected').forEach(d => d.classList.remove('is-selected'));
+                el.classList.add('is-selected');
+                renderDayDetail(key);
             };
-            
-            div.appendChild(addButton);
+            el.addEventListener('click', select);
+            el.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    select();
+                }
+            });
+
+            // Masaüstü: hücrede hızlı ekleme düğmesi
+            const addButton = document.createElement('button');
+            addButton.type = 'button';
+            addButton.className = 'btn btn-sm btn-secondary add-appointment-btn';
+            addButton.innerHTML = '<i class="bi bi-plus-lg" aria-hidden="true"></i>';
+            addButton.setAttribute('aria-label', `${day} ${monthNames[currentMonth]} için randevu ekle`);
+            addButton.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openAddFor(key);
+            });
+            el.appendChild(addButton);
         }
-        
-        return div;
+
+        return el;
     }
-    
-    function getAppointmentStatus(appointment) {
-        const aptDateTime = new Date(appointment.appointment_date + 'T' + appointment.appointment_time);
-        const now = new Date();
-        
-        if (aptDateTime < now) return 'past';
-        if (aptDateTime.toDateString() === now.toDateString()) return 'today';
-        return 'future';
-    }
-    
-    function showAppointmentDetails(appointment) {
-        const modal = document.getElementById('editAppointmentModal' + appointment.id);
-        if (modal && typeof bootstrap !== 'undefined') {
-            const bsModal = new bootstrap.Modal(modal);
-            bsModal.show();
-        }
-    }
-    
+
     prevMonthButton.addEventListener('click', () => {
         currentMonth--;
         if (currentMonth < 0) {
             currentMonth = 11;
             currentYear--;
         }
+        selectedKey = toKey(new Date(currentYear, currentMonth, 1));
+        if (currentMonth === today.getMonth() && currentYear === today.getFullYear()) selectedKey = toKey(today);
         updateCalendar();
     });
-    
+
     nextMonthButton.addEventListener('click', () => {
         currentMonth++;
         if (currentMonth > 11) {
             currentMonth = 0;
             currentYear++;
         }
+        selectedKey = toKey(new Date(currentYear, currentMonth, 1));
+        if (currentMonth === today.getMonth() && currentYear === today.getFullYear()) selectedKey = toKey(today);
         updateCalendar();
     });
-    
+
     // Takvimi başlat
     updateCalendar();
 };
 
 // Arama modalından client düzenleme
 window.editClientFromSearch = function(clientId) {
-    // Mevcut modal'ı kapat
-    const searchModal = bootstrap.Modal.getInstance(document.getElementById('searchResultsModal'));
-    if (searchModal) {
-        searchModal.hide();
-    }
-    
-    // Düzenleme modalını aç
-    setTimeout(() => {
-        const editModal = document.getElementById('editClientModal' + clientId);
-        if (editModal && typeof bootstrap !== 'undefined') {
-            const modal = new bootstrap.Modal(editModal);
-            modal.show();
-        } else {
-            // Modal bulunamadıysa sayfayı yenile
-            window.location.reload();
-        }
-    }, 300);
+    openModalAfterSearch('editClientModal' + clientId, () => {
+        window.location.href = 'client-details?id=' + encodeURIComponent(clientId);
+    });
 };
 
 // Arama modalından client silme
 window.deleteClientFromSearch = function(clientId, clientName) {
-    // Mevcut modal'ı kapat
-    const searchModal = bootstrap.Modal.getInstance(document.getElementById('searchResultsModal'));
-    if (searchModal) {
-        searchModal.hide();
-    }
-    
-    // Silme onay modalını aç
-    setTimeout(() => {
-        const deleteModal = document.getElementById('deleteClientModal' + clientId);
-        if (deleteModal && typeof bootstrap !== 'undefined') {
-            const modal = new bootstrap.Modal(deleteModal);
-            modal.show();
-        } else {
-            // Modal bulunamadıysa basit confirm kullan
-            if (confirm(`${clientName} adlı danışanı silmek istediğinizden emin misiniz?`)) {
-                // Form submit işlemi
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = 'process/delete-client';
-                
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = 'client_id';
-                input.value = clientId;
-                
-                form.appendChild(input);
-                document.body.appendChild(form);
-                form.submit();
-            }
+    openModalAfterSearch('deleteClientModal' + clientId, () => {
+        // Modal bulunamadıysa basit confirm kullan
+        if (confirm(`${clientName} adlı danışanı silmek istediğinizden emin misiniz?`)) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'process/delete-client';
+
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'client_id';
+            input.value = clientId;
+
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
         }
-    }, 300);
-}; 
+    });
+};
